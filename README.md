@@ -102,6 +102,21 @@ class ExampleSNN(nn.Module):
 
         spikes_sum = spikes.sum(dim=0).float()
         return self.output_layer(spikes_sum)
+
+# Example Usage, assuming input is a tensor of shape (timesteps, batch_size, input_neurons)
+if __name__ == "__main__":
+
+    input_neurons = 100
+    hidden_neurons = 50
+    output_neurons = 10
+    timesteps = 16
+    batch_size = 10
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    
+    input = torch.rand((timesteps, batch_size, input_neurons), device=device)
+    
+    model = ExampleSNN(input_neurons, hidden_neurons, output_neurons, timesteps, batch_size).to(device)
+    output = model(input)
 ```
 This example demonstrates how to set up and simulate spiking neural dynamics for multiple neurons in parallel, leveraging PyTorch for efficient computation.
 
