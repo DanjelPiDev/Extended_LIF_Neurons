@@ -1,4 +1,5 @@
 import numpy as np
+import torch
 
 
 class LIFNeuronGroup:
@@ -17,7 +18,9 @@ class LIFNeuronGroup:
                  noise_std: float = 0.1,
                  stochastic: bool = True,
                  min_threshold: float = 0.5,
-                 max_threshold: float = 2.0):
+                 max_threshold: float = 2.0,
+                 batch_size: int = 1,
+                 device: str = "cpu",):
         """
         Initialize the LIF neuron group with its parameters.
 
@@ -40,41 +43,45 @@ class LIFNeuronGroup:
         assert min_threshold > 0, "Minimum threshold must be positive."
         assert max_threshold > min_threshold, "Maximum threshold must be greater than the minimum threshold."
         assert dt > 0, "Time step (dt) must be positive."
+        assert batch_size > 0, "Batch size must be positive."
+        assert device in ["cpu", "cuda"], "Device must be either 'cpu' or 'cuda'."
+
+        self.batch_size = batch_size
+        self.device = device
 
         self.num_neurons = num_neurons
-        self.V_th = np.full(num_neurons, V_th)
-        self.V_reset = V_reset
-        self.tau = tau
-        self.dt = dt
-        self.eta = eta
-        self.V = np.zeros(num_neurons)
-        self.spikes = np.zeros(num_neurons, dtype=bool)
+        self.V_th = torch.full((batch_size, num_neurons), V_th, device=device)
+        self.V_reset = torch.tensor(V_reset, device=device)
+        self.tau = torch.tensor(tau, device=device)
+        self.dt = torch.tensor(dt, device=device)
+        self.eta = torch.tensor(eta, device=device)
+        self.V = torch.zeros((batch_size, num_neurons), device=device)
+        self.spikes = torch.zeros((batch_size, num_neurons), dtype=torch.bool, device=device)
         self.use_adaptive_threshold = use_adaptive_threshold
-        self.noise_std = noise_std
+        self.noise_std = torch.tensor(noise_std, device=device)
         self.stochastic = stochastic
 
         self.min_threshold = min_threshold
         self.max_threshold = max_threshold
 
-    def step(self, I: np.ndarray) -> np.ndarray:
+    def step(self, I: torch.Tensor) -> torch.Tensor:
         """
         Simulate one time step for all neurons in the group.
 
         :param I: Input current (array of size `num_neurons`).
         :return: Array of spike statuses (True for neurons that fired, False otherwise).
         """
-        assert I.shape[0] == self.num_neurons, "Input current must match the number of neurons."
+        assert I.shape == (self.batch_size, self.num_neurons), \
+            "Input current shape must match (batch_size, num_neurons)."
 
-        batch_size = I.shape[0]
-
-        noise = np.random.normal(0, self.noise_std, size=(batch_size, self.num_neurons)) if self.stochastic else 0.0
+        noise = torch.normal(0, self.noise_std.item(), size=I.shape, device=self.device) if self.stochastic else torch.zeros_like(I)
 
         dV = (I - self.V) / self.tau
         self.V += dV * self.dt + noise / self.V_th
 
         if self.stochastic:
             spike_prob = self.sigmoid(self.V - self.V_th)
-            self.spikes = np.random.uniform(0, 1, size=(batch_size, self.num_neurons)) < spike_prob
+            self.spikes = torch.rand_like(self.V, device=self.device) < spike_prob
         else:
             self.spikes = self.V >= self.V_th
 
@@ -87,7 +94,7 @@ class LIFNeuronGroup:
             self.V_th[~self.spikes] -= self.eta * (self.V_th[~self.spikes] - 1.0)
 
         # Clip threshold to the specified range
-        self.V_th = np.clip(self.V_th, self.min_threshold, self.max_threshold)
+        self.V_th = torch.clamp(self.V_th, self.min_threshold, self.max_threshold)
 
         return self.spikes
 

@@ -109,11 +109,11 @@ bernoulli_spikes = bernoulli_layer(input_tensor)
 
 ## Performance Tests
 
-I conducted performance tests to evaluate the scalability and efficiency of the `LIFNeuronGroup` implementation. Below are the results:
+We conducted performance tests to evaluate the scalability and efficiency of the `LIFNeuronGroup` implementation using PyTorch and batch processing. Below are the results:
 
 ### Results Summary
 1. **Time Complexity**: The implementation exhibits a time complexity of \(O(n)\), where \(n\) is the number of neurons. This is optimal for simulating spiking neural networks, as each neuron requires updates for each timestep.
-2. **Linear Scaling**: The runtime and memory usage scale linearly with the number of neurons, as shown in the plots below.
+2. **Linear Scaling**: The runtime and memory usage scale linearly (Without noise it is constant) with the number of neurons, as shown in the plots below.
 3. **Effect of Features**: Adding noise and adaptive thresholds introduces slight overhead but maintains linear scaling.
 
 ### Runtime Scaling with Neuron Count
@@ -121,7 +121,7 @@ I conducted performance tests to evaluate the scalability and efficiency of the 
 #### Performance Without Noise
 
 <div align="center">
-  <img src="./src/Images/performance_without_noise_runtime.png" alt="Performance Without Noise - Runtime]" width="500"/>
+  <img src="./src/Images/performance_without_noise_runtime.png" alt="Performance Without Noise - Runtime" width="500"/>
 </div>
 
 - Runtime increases linearly with the number of neurons, demonstrating efficient vectorized operations.
@@ -142,7 +142,7 @@ I conducted performance tests to evaluate the scalability and efficiency of the 
   <img src="./src/Images/performance_without_noise_memory.png" alt="Performance Without Noise - Memory Usage" width="500"/>
 </div>
 
-- Memory usage also scales linearly, as each neuron stores its own state.
+- The constant memory usage without noise is due to the absence of additional computational steps
 
 #### Performance With Noise and Adaptive Thresholds
 
@@ -151,7 +151,7 @@ I conducted performance tests to evaluate the scalability and efficiency of the 
 </div>
 
 - Memory usage remains manageable, even with additional features enabled.
-
+- 
 ---
 
 ## Acknowledgments
