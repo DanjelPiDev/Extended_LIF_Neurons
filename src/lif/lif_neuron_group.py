@@ -68,8 +68,8 @@ class LIFNeuronGroup:
         """
         Simulate one time step for all neurons in the group.
 
-        :param I: Input current (array of size `num_neurons`).
-        :return: Array of spike statuses (True for neurons that fired, False otherwise).
+        :param I: Tensor of input currents with shape (batch_size, num_neurons).
+        :return: Spike tensor (binary) of shape (batch_size, num_neurons).
         """
         assert I.shape == (self.batch_size, self.num_neurons), \
             "Input current shape must match (batch_size, num_neurons)."
