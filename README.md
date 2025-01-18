@@ -88,22 +88,37 @@ pip install .
 ```
 
 ### PyTorch Integration
-This repository also includes PyTorch-compatible layers for LIF and Bernoulli neurons. You can use these layers in your neural networks:
+This repository also includes PyTorch-compatible layers for 
+LIF and Bernoulli neurons. Below is an example of using the 
+LIFNeuronGroup class with PyTorch:
 
 ```python
 import torch
+from lif.lif_neuron_group import LIFNeuronGroup
 
-from snn_neurons.torch_layers import TorchLIFLayer, TorchBernoulliLayer
+# Define the parameters for the LIF neuron group
+num_neurons = 100
+batch_size = 5
+timesteps = 10
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
-# Example
-lif_layer = TorchLIFLayer(num_neurons=10)
-bernoulli_layer = TorchBernoulliLayer(num_neurons=10)
+# Initialize the neuron group
+neuron_group = LIFNeuronGroup(
+    num_neurons=num_neurons,
+    noise_std=0.1,
+    use_adaptive_threshold=True,
+    stochastic=True,
+    batch_size=batch_size,
+    device=device
+)
 
-# Forward pass
-input_tensor = torch.rand(2, 10)  # Batch size 2, 10 neurons
-lif_spikes = lif_layer(input_tensor)
-bernoulli_spikes = bernoulli_layer(input_tensor)
+# Simulate with random input currents
+inputs = torch.rand((timesteps, batch_size, num_neurons), device=device)
+for t in range(timesteps):
+    spikes = neuron_group.step(inputs[t])
+    print(f"Time step {t + 1}, Spikes: {spikes}")
 ```
+This example demonstrates how to set up and simulate spiking neural dynamics for multiple neurons in parallel, leveraging PyTorch for efficient computation.
 
 ---
 

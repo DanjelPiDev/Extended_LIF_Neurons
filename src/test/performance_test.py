@@ -97,7 +97,7 @@ if __name__ == "__main__":
     # Test configurations
     neuron_counts = [10_000, 100_000, 1_000_000, 10_000_000]
     timesteps = 16
-    batch_size = 1  # Adjust as needed
+    batch_size = 10
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # Performance tests
