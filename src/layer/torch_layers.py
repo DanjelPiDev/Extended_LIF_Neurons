@@ -6,13 +6,15 @@ from lif.lif_neuron import LIFNeuron
 from lif.lif_neuron_group import LIFNeuronGroup
 
 
-class TorchLIFLayer(nn.Module):
+class SingleLIFLayer(nn.Module):
     """
+    Not recommended for large neuron counts, use LIFLayer (wrapper for the LIFNeuronGroup) instead.
+
     PyTorch-compatible LIF layer that wraps the LIFNeuron class.
     """
 
     def __init__(self, num_neurons, V_th=1.0, V_reset=0.0, tau=20.0, dt=1.0):
-        super(TorchLIFLayer, self).__init__()
+        super(SingleLIFLayer, self).__init__()
         self.num_neurons = num_neurons
         self.neurons = [LIFNeuron(V_th, V_reset, tau, dt) for _ in range(num_neurons)]
 
@@ -33,20 +35,22 @@ class TorchLIFLayer(nn.Module):
         return torch.tensor(output_spikes, dtype=torch.float32)
 
 
-class TorchLIFNeuronGroup(nn.Module):
+class LIFLayer(nn.Module):
     """
     A PyTorch wrapper for the LIFNeuronGroup class to integrate with PyTorch layers.
     """
     def __init__(self, num_neurons, V_th=1.0, V_reset=0.0, tau=20.0, dt=1.0,
                  eta=0.1, use_adaptive_threshold=True, noise_std=0.1,
-                 stochastic=True, min_threshold=0.5, max_threshold=2.0):
-        super(TorchLIFNeuronGroup, self).__init__()
+                 stochastic=True, min_threshold=0.5, max_threshold=2.0,
+                 batch_size=1, device="cuda"):
+        super(LIFLayer, self).__init__()
 
         self.lif_group = LIFNeuronGroup(
             num_neurons=num_neurons, V_th=V_th, V_reset=V_reset, tau=tau, dt=dt,
             eta=eta, use_adaptive_threshold=use_adaptive_threshold,
             noise_std=noise_std, stochastic=stochastic,
-            min_threshold=min_threshold, max_threshold=max_threshold
+            min_threshold=min_threshold, max_threshold=max_threshold,
+            batch_size=batch_size, device=device
         )
 
     def forward(self, input_current: torch.Tensor) -> torch.Tensor:

@@ -79,6 +79,8 @@ LIFNeuronGroup class with PyTorch:
 ```python
 import torch
 from lif.lif_neuron_group import LIFNeuronGroup
+# or if you want to use the PyTorch-compatible version
+# from layer.torch_layers import LIFNeuronGroupLayer
 
 # Define the parameters for the LIF neuron group
 num_neurons = 100
