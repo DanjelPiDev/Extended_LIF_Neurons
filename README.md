@@ -95,9 +95,11 @@ class ExampleSNN(nn.Module):
 
     def forward(self, x):
         spikes = self.input_layer(x)
-        spikes = self.hidden_layer(spikes)
+        spikes = spikes.sum(dim=0).float()
+        spikes = self.input_to_hidden(spikes)
+        spikes = self.hidden_layer(spikes.unsqueeze(0))
 
-        spikes_sum = spikes.sum(dim=0)
+        spikes_sum = spikes.sum(dim=0).float()
         return self.output_layer(spikes_sum)
 ```
 This example demonstrates how to set up and simulate spiking neural dynamics for multiple neurons in parallel, leveraging PyTorch for efficient computation.
