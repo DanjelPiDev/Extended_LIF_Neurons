@@ -151,7 +151,7 @@ I conducted performance tests to evaluate the scalability and efficiency of the 
 </div>
 
 - Memory usage remains manageable, even with additional features enabled.
-- 
+
 ---
 
 ## Acknowledgments
