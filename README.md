@@ -84,14 +84,15 @@ from layers.torch_layers import LIFLayer
 
 
 class ExampleSNN(nn.Module):
-    def __init__(self, input_neurons, hidden_neurons, timesteps, batch_size):
+    def __init__(self, input_neurons, hidden_neurons, output_neurons, timesteps, batch_size):
         super(ExampleSNN, self).__init__()
         self.timesteps = timesteps
 
         self.input_layer = LIFLayer(num_neurons=input_neurons, batch_size=batch_size)
         self.hidden_layer = LIFLayer(num_neurons=hidden_neurons, batch_size=batch_size)
         # ... Add more layers as needed
-        # self.output_layer = ...
+        self.input_to_hidden = nn.Linear(input_neurons, hidden_neurons)
+        self.output_layer = nn.Linear(hidden_neurons, output_neurons)
 
     def forward(self, x):
         spikes = self.input_layer(x)
