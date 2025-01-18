@@ -129,7 +129,7 @@ I conducted performance tests to evaluate the scalability and efficiency of the 
 ### Results Summary
 1. **Time Complexity**: The implementation exhibits a time complexity of \(O(n)\), where \(n\) is the number of neurons. This is optimal for simulating spiking neural networks, as each neuron requires updates for each timestep.
 2. **Linear Scaling**: The runtime and memory usage scale linearly (Without noise it is constant) with the number of neurons, as shown in the plots below.
-3. **Effect of Features**: Adding noise and adaptive thresholds introduces slight overhead but maintains linear scaling.
+3. **Effect of Features**: Adding noise and adaptive thresholds maintains linear scaling.
 
 ### Runtime Scaling with Neuron Count
 
@@ -166,7 +166,7 @@ I conducted performance tests to evaluate the scalability and efficiency of the 
 </div>
 
 - Memory usage remains manageable, even with additional features enabled.
-- 
+
 ---
 
 ## Acknowledgments
