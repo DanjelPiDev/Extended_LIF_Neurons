@@ -57,19 +57,27 @@ class LIFLayer(nn.Module):
         """
         Forward pass for the LIFNeuronGroup in PyTorch.
 
-        :param input_current: Input tensor of shape (batch_size, num_neurons).
-        :return: Spike tensor (binary) of shape (batch_size, num_neurons).
+        :param input_current: Input tensor of shape (batch_size, num_neurons) or (timesteps, batch_size, num_neurons).
+        :return: Spike tensor (binary) of shape (batch_size, num_neurons) or (timesteps, batch_size, num_neurons).
         """
-        if not isinstance(input_current, torch.Tensor):
-            raise ValueError("Input current must be a PyTorch tensor.")
+        # Time-dependent simulation
+        if len(input_current.shape) == 3:
+            timesteps, batch_size, num_neurons = input_current.shape
+            assert batch_size == self.lif_group.batch_size, \
+                f"Batch size must match ({self.lif_group.batch_size})."
+            assert num_neurons == self.lif_group.num_neurons, \
+                f"Number of neurons must match ({self.lif_group.num_neurons})."
 
-        # Ensure the input current matches the expected shape
-        assert input_current.shape == (self.lif_group.batch_size, self.lif_group.num_neurons), \
-            f"Input tensor shape must match (batch_size={self.lif_group.batch_size}, num_neurons={self.lif_group.num_neurons})."
+            output_spikes = []
+            for t in range(timesteps):
+                spikes = self.lif_group.step(input_current[t])
+                output_spikes.append(spikes)
 
-        output_spikes = []
-        for t in range(input_current.size(0)):
-            spikes = self.lif_group.step(input_current[t])
-            output_spikes.append(spikes)
+            return torch.stack(output_spikes, dim=0)
+        # Static input
+        else:
+            assert input_current.shape == (self.lif_group.batch_size, self.lif_group.num_neurons), \
+                f"Input tensor shape must match (batch_size={self.lif_group.batch_size}, num_neurons={self.lif_group.num_neurons})."
 
-        return torch.stack(output_spikes, dim=0)
+            return self.lif_group.step(input_current)
+

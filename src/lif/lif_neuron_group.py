@@ -99,10 +99,11 @@ class LIFNeuronGroup:
         return self.spikes
 
     @staticmethod
-    def sigmoid(x):
+    def sigmoid(x: torch.Tensor) -> torch.Tensor:
         """
         Sigmoid function to calculate spike probability.
-        :param x: Input value.
-        :return: Probability in the range [0, 1].
+
+        :param x: Input tensor.
+        :return: Probability tensor in the range [0, 1].
         """
-        return 1 / (1 + np.exp(-x))
+        return 1 / (1 + torch.exp(-x))

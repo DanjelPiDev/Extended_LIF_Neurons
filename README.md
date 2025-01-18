@@ -43,7 +43,7 @@ This figure shows the membrane potential of a single LIF neuron over time:
 - **Bottom Plot**: Spike train. Each vertical line indicates a spike event.
 
 ### 2. **LIF Neuron with ReLU Activation**
-Here, the input to the LIF neuron is passed through a ReLU activation layer:
+Here, the input to the LIF neuron is passed through a ReLU activation layers:
 
 ![ReLU Activation with LIF Neuron](./src/Images/Spikes_ReLU.png)
 
@@ -78,31 +78,27 @@ LIFNeuronGroup class with PyTorch:
 
 ```python
 import torch
-from lif.lif_neuron_group import LIFNeuronGroup
-# or if you want to use the PyTorch-compatible version
-# from layer.torch_layers import LIFNeuronGroupLayer
 
-# Define the parameters for the LIF neuron group
-num_neurons = 100
-batch_size = 5
-timesteps = 10
-device = "cuda" if torch.cuda.is_available() else "cpu"
+from torch import nn
+from layers.torch_layers import LIFLayer
 
-# Initialize the neuron group
-neuron_group = LIFNeuronGroup(
-    num_neurons=num_neurons,
-    noise_std=0.1,
-    use_adaptive_threshold=True,
-    stochastic=True,
-    batch_size=batch_size,
-    device=device
-)
 
-# Simulate with random input currents
-inputs = torch.rand((timesteps, batch_size, num_neurons), device=device)
-for t in range(timesteps):
-    spikes = neuron_group.step(inputs[t])
-    print(f"Time step {t + 1}, Spikes: {spikes}")
+class ExampleSNN(nn.Module):
+    def __init__(self, input_neurons, hidden_neurons, timesteps, batch_size):
+        super(ExampleSNN, self).__init__()
+        self.timesteps = timesteps
+
+        self.input_layer = LIFLayer(num_neurons=input_neurons, batch_size=batch_size)
+        self.hidden_layer = LIFLayer(num_neurons=hidden_neurons, batch_size=batch_size)
+        # ... Add more layers as needed
+        # self.output_layer = ...
+
+    def forward(self, x):
+        spikes = self.input_layer(x)
+        spikes = self.hidden_layer(spikes)
+
+        spikes_sum = spikes.sum(dim=0)
+        return self.output_layer(spikes_sum)
 ```
 This example demonstrates how to set up and simulate spiking neural dynamics for multiple neurons in parallel, leveraging PyTorch for efficient computation.
 
