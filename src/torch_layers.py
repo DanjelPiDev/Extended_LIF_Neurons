@@ -4,7 +4,6 @@ import numpy as np
 
 from lif.lif_neuron import LIFNeuron
 from lif.lif_neuron_group import LIFNeuronGroup
-from abss.autoregressive_bernoulli_layer import AutoregressiveBernoulliLayer
 
 
 class TorchLIFLayer(nn.Module):
@@ -50,7 +49,7 @@ class TorchLIFNeuronGroup(nn.Module):
             min_threshold=min_threshold, max_threshold=max_threshold
         )
 
-    def forward(self, input_current):
+    def forward(self, input_current: torch.Tensor) -> torch.Tensor:
         """
         Forward pass for the LIFNeuronGroup in PyTorch.
 
@@ -60,40 +59,13 @@ class TorchLIFNeuronGroup(nn.Module):
         if not isinstance(input_current, torch.Tensor):
             raise ValueError("Input current must be a PyTorch tensor.")
 
-        input_current_np = input_current.cpu().numpy()
+        # Ensure the input current matches the expected shape
+        assert input_current.shape == (self.lif_group.batch_size, self.lif_group.num_neurons), \
+            f"Input tensor shape must match (batch_size={self.lif_group.batch_size}, num_neurons={self.lif_group.num_neurons})."
 
-        batch_size, num_neurons = input_current_np.shape
         output_spikes = []
-        for i in range(batch_size):
-            spikes = self.lif_group.step(input_current_np[i])
+        for t in range(input_current.size(0)):
+            spikes = self.lif_group.step(input_current[t])
             output_spikes.append(spikes)
 
-        return torch.tensor(output_spikes, dtype=torch.float32, device=input_current.device)
-
-
-class TorchBernoulliLayer(nn.Module):
-    """
-    PyTorch-compatible Autoregressive Bernoulli spiking layer that wraps the AutoregressiveBernoulliLayer class.
-    """
-
-    def __init__(self, num_neurons, tau=20.0, dt=1.0, autoregressive_weight=0.5):
-        super(TorchBernoulliLayer, self).__init__()
-        self.num_neurons = num_neurons
-        self.layer = AutoregressiveBernoulliLayer(num_neurons, tau, dt)
-        self.autoregressive_weight = autoregressive_weight
-
-    def forward(self, input_current):
-        """
-        Forward pass for Bernoulli spiking neurons.
-
-        :param input_current: Input tensor of shape (batch_size, num_neurons).
-        :return: Spike tensor (binary) of shape (batch_size, num_neurons).
-        """
-        batch_size = input_current.size(0)
-        output_spikes = []
-
-        for i in range(batch_size):
-            spikes = self.layer.step(input_current[i].tolist(), self.autoregressive_weight)
-            output_spikes.append(spikes)
-
-        return torch.tensor(output_spikes, dtype=torch.float32)
+        return torch.stack(output_spikes, dim=0)

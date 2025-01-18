@@ -1,26 +1,20 @@
-# LIF and Bernoulli Neuron Simulation
+# LIF Neuron Simulation
 
 ### 🚀 Development Notes
 > ⚡ I developed my own implementation of LIF neurons because the 
-> norse library did not meet my specific requirements. 
-> Additionally, I created Bernoulli neurons, which are a 
-> probabilistic spiking neuron model, and extended LIF 
-> neurons to support probabilistic behavior in the latest update. 
+> norse library did not meet my specific requirements.
 > I also implemented PyTorch-compatible layers for LIF neurons, 
 > enabling their integration into neural network models.
 
 ---
 
->Bernoulli neurons are going to be replaced by the LIFNeuronGroup (Already supporting the probabilistic spike generation).
->So I will remove the Bernoulli neurons in the next update.
-
----
-
-This repository implements spiking neural networks using **Leaky Integrate-and-Fire (LIF)** neurons and **Autoregressive Bernoulli Spiking** neurons. The simulations include membrane potential tracking, spike generation, and a comparison of spiking behaviors between neuron types.
+This repository implements spiking neural networks using 
+**Leaky Integrate-and-Fire (LIF)** neurons. The simulations 
+include membrane potential tracking, spike generation, 
+and a comparison of spiking behaviors between neuron types.
 
 ## Key Features
-- Simulation of **LIF neurons** with voltage decay, threshold-based spiking, and membrane reset.
-- **Autoregressive Bernoulli Spike Sampling (ABSS)** for probabilistic spike generation.
+- Simulation of **LIF neurons** with voltage decay, threshold-based spiking, probabilistic spike generation, and membrane reset.
 - Visualization of membrane potentials and spike trains for single and multiple neurons.
 - PyTorch-compatible layers for integration into neural network models.
 
@@ -65,24 +59,6 @@ This simulation shows the behavior of 10 LIF neurons with slightly varying input
 - **Top Plot**: Membrane potentials of 10 neurons over time. Each neuron has its own dynamics.
 - **Bottom Plot**: Spike train for all neurons. Each row corresponds to a neuron, with vertical lines marking spike events.
 
-### 4. **Autoregressive Bernoulli Spiking Neurons (ABSS)**
-This plot shows the behavior of 10 ABSS neurons:
-
-![Bernoulli Spiking Neurons](./src/Images/ABSS.png)
-
-- **Top Plot**: Membrane potentials of Bernoulli neurons. The potentials fluctuate based on input and autoregressive feedback.
-- **Bottom Plot**: Spike train for the Bernoulli neurons. Spike probabilities are sampled from a Bernoulli distribution.
-
-### 5. **Comparison of LIF and Bernoulli Neurons**
-This combined visualization compares the spike trains of LIF and Bernoulli neurons:
-
-![LIF vs Bernoulli Comparison](./src/Images/ABSS_LIF_Combine.png)
-
-- **Top Plot**: ReLU activation.
-- **Second Plot**: Membrane potentials of LIF neurons.
-- **Third Plot**: Membrane potentials of Bernoulli neurons.
-- **Bottom Plot**: Spike trains of LIF and Bernoulli neurons, highlighting their differences.
-
 ---
 
 ## How to Use
@@ -97,7 +73,7 @@ pip install .
 
 ### PyTorch Integration
 This repository also includes PyTorch-compatible layers for 
-LIF and Bernoulli neurons. Below is an example of using the 
+LIF neurons. Below is an example of using the 
 LIFNeuronGroup class with PyTorch:
 
 ```python
@@ -178,7 +154,7 @@ I conducted performance tests to evaluate the scalability and efficiency of the 
 ---
 
 ## Acknowledgments
-This project was developed to simulate and visualize spiking neural networks, combining classical LIF models with modern probabilistic approaches like ABSS.
+This project was developed to simulate and visualize spiking neural networks, combining classical LIF models with modern probabilistic approaches like.
 
 ---
 
