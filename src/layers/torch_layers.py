@@ -6,6 +6,7 @@ from lif.lif_neuron import LIFNeuron
 from lif.lif_neuron_group import LIFNeuronGroup
 
 
+@DeprecationWarning
 class SingleLIFLayer(nn.Module):
     """
     Not recommended for large neuron counts, use LIFLayer (wrapper for the LIFNeuronGroup) instead.

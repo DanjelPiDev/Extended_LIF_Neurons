@@ -1,6 +1,7 @@
 import numpy as np
 
 
+@DeprecationWarning
 class LIFNeuron:
     """
     A Leaky Integrate-and-Fire (LIF) neuron model.
