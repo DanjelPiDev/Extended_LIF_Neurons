@@ -1,12 +1,21 @@
 # LIF and Bernoulli Neuron Simulation
 
-> I developed my own implementation of LIF neurons because the 
-> norse library did not meet my specific requirements. 
-> Additionally, I created Bernoulli neurons, which are a 
-> probabilistic spiking neuron model, and extended LIF 
-> neurons to support probabilistic behavior in the latest update. 
-> I also implemented PyTorch-compatible layers for LIF neurons, 
-> enabling their integration into neural network models.
+<div style="background-color: #2c464f; border-left: 5px solid #007bff; padding: 10px; margin: 10px 0;">
+I developed my own implementation of LIF neurons because the 
+norse library did not meet my specific requirements. 
+Additionally, I created Bernoulli neurons, which are a 
+probabilistic spiking neuron model, and extended LIF 
+neurons to support probabilistic behavior in the latest update. 
+I also implemented PyTorch-compatible layers for LIF neurons, 
+enabling their integration into neural network models.
+</div>
+
+
+<div style="background-color: #563a1b; border-left: 5px solid #007bff; padding: 10px; margin: 10px 0;">
+Bernoulli neurons are going to be replaced by the LIFNeuronGroup (Already supporting the probabilistic spike generation).
+So I will remove the Bernoulli neurons in the next update.
+</div>
+
 
 This repository implements spiking neural networks using **Leaky Integrate-and-Fire (LIF)** neurons and **Autoregressive Bernoulli Spiking** neurons. The simulations include membrane potential tracking, spike generation, and a comparison of spiking behaviors between neuron types.
 
