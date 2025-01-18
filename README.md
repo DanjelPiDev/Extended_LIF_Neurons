@@ -1,5 +1,13 @@
 # LIF and Bernoulli Neuron Simulation
 
+> I developed my own implementation of LIF neurons because the 
+> norse library did not meet my specific requirements. 
+> Additionally, I created Bernoulli neurons, which are a 
+> probabilistic spiking neuron model, and extended LIF 
+> neurons to support probabilistic behavior in the latest update. 
+> I also implemented PyTorch-compatible layers for LIF neurons, 
+> enabling their integration into neural network models.
+
 This repository implements spiking neural networks using **Leaky Integrate-and-Fire (LIF)** neurons and **Autoregressive Bernoulli Spiking** neurons. The simulations include membrane potential tracking, spike generation, and a comparison of spiking behaviors between neuron types.
 
 ## Key Features
@@ -9,6 +17,18 @@ This repository implements spiking neural networks using **Leaky Integrate-and-F
 - PyTorch-compatible layers for integration into neural network models.
 
 ---
+
+## Changelog
+- **Noise Support:** Gaussian noise can now be added to the membrane potential, improving biological realism.
+- **Adaptive Thresholds:** Thresholds increase dynamically after a spike and decay over time, with configurable limits using `min_threshold` and `max_threshold`.
+- **Vectorized LIFNeuronGroup:** Efficient simulation of multiple neurons with parallel processing, supporting batch inputs.
+- **PyTorch Integration:** Added `TorchLIFNeuronGroup` for seamless integration of vectorized neuron simulations into PyTorch models.
+
+In the following images, you can see the threshold stochastic and LIF neuron group simulations with 100 neurons each:
+<div align="center">
+  <img src="./src/Images/Threshold_Stochastic.png" width="400">
+  <img src="./src/Images/lif_neuron_group.png" width="400">
+</div>
 
 ## Images and Explanation
 
@@ -84,6 +104,53 @@ input_tensor = torch.rand(2, 10)  # Batch size 2, 10 neurons
 lif_spikes = lif_layer(input_tensor)
 bernoulli_spikes = bernoulli_layer(input_tensor)
 ```
+
+---
+
+## Performance Tests
+
+We conducted performance tests to evaluate the scalability and efficiency of the `LIFNeuronGroup` implementation. Below are the results:
+
+### Results Summary
+1. **Time Complexity**: The implementation exhibits a time complexity of \(O(n)\), where \(n\) is the number of neurons. This is optimal for simulating spiking neural networks, as each neuron requires updates for each timestep.
+2. **Linear Scaling**: The runtime and memory usage scale linearly with the number of neurons, as shown in the plots below.
+3. **Effect of Features**: Adding noise and adaptive thresholds introduces slight overhead but maintains linear scaling.
+
+### Runtime Scaling with Neuron Count
+
+#### Performance Without Noise
+
+<div align="center">
+  <img src="./src/Images/performance_without_noise_runtime.png" alt="Performance Without Noise - Runtime]" width="500"/>
+</div>
+
+- Runtime increases linearly with the number of neurons, demonstrating efficient vectorized operations.
+
+#### Performance With Noise and Adaptive Thresholds
+
+<div align="center">
+  <img src="./src/Images/performance_with_noise_and_adaptive_thresholds_runtime.png" alt="Performance With Noise and Adaptive Thresholds - Runtime" width="500"/>
+</div>
+
+- Adding noise and adaptive thresholds increases the runtime slightly due to additional computations.
+
+### Memory Usage Scaling
+
+#### Performance Without Noise
+
+<div align="center">
+  <img src="./src/Images/performance_without_noise_memory.png" alt="Performance Without Noise - Memory Usage" width="500"/>
+</div>
+
+- Memory usage also scales linearly, as each neuron stores its own state.
+
+#### Performance With Noise and Adaptive Thresholds
+
+<div align="center">
+  <img src="./src/Images/performance_with_noise_and_adaptive_thresholds_memory.png" alt="Performance With Noise and Adaptive Thresholds - Memory Usage" width="500"/>
+</div>
+
+- Memory usage remains manageable, even with additional features enabled.
 
 ---
 
