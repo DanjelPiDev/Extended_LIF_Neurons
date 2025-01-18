@@ -65,14 +65,16 @@ class LIFNeuronGroup:
         """
         assert I.shape[0] == self.num_neurons, "Input current must match the number of neurons."
 
-        noise = np.random.normal(0, self.noise_std, size=self.num_neurons) if self.stochastic else 0.0
+        batch_size = I.shape[0]
+
+        noise = np.random.normal(0, self.noise_std, size=(batch_size, self.num_neurons)) if self.stochastic else 0.0
 
         dV = (I - self.V) / self.tau
         self.V += dV * self.dt + noise / self.V_th
 
         if self.stochastic:
             spike_prob = self.sigmoid(self.V - self.V_th)
-            self.spikes = np.random.uniform(0, 1, size=self.num_neurons) < spike_prob
+            self.spikes = np.random.uniform(0, 1, size=(batch_size, self.num_neurons)) < spike_prob
         else:
             self.spikes = self.V >= self.V_th
 
