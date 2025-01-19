@@ -40,30 +40,54 @@ class LIFLayer(nn.Module):
     """
     A PyTorch wrapper for the LIFNeuronGroup class to integrate with PyTorch layers.
     """
-    def __init__(self, num_neurons, V_th=1.0, V_reset=0.0, tau=20.0, dt=1.0,
-                 eta=0.1, use_adaptive_threshold=True, noise_std=0.1,
-                 stochastic=True, min_threshold=0.5, max_threshold=2.0,
-                 batch_size=1, device="cuda"):
+
+    def __init__(self,
+                 num_neurons,
+                 V_th=1.0,
+                 V_reset=0.0,
+                 tau=20.0,
+                 dt=1.0,
+                 eta=0.1,
+                 use_adaptive_threshold=True,
+                 noise_std=0.1,
+                 stochastic=True,
+                 min_threshold=0.5,
+                 max_threshold=2.0,
+                 batch_size=1,
+                 device="cuda",
+                 spike_coding=None):
         super(LIFLayer, self).__init__()
 
         self.lif_group = LIFNeuronGroup(
-            num_neurons=num_neurons, V_th=V_th, V_reset=V_reset, tau=tau, dt=dt,
-            eta=eta, use_adaptive_threshold=use_adaptive_threshold,
-            noise_std=noise_std, stochastic=stochastic,
-            min_threshold=min_threshold, max_threshold=max_threshold,
-            batch_size=batch_size, device=device
+            num_neurons=num_neurons,
+            V_th=V_th,
+            V_reset=V_reset,
+            tau=tau,
+            dt=dt,
+            eta=eta,
+            use_adaptive_threshold=use_adaptive_threshold,
+            noise_std=noise_std,
+            stochastic=stochastic,
+            min_threshold=min_threshold,
+            max_threshold=max_threshold,
+            batch_size=batch_size,
+            device=device
         )
+        self.spike_coding = spike_coding
 
-    def forward(self, input_current: torch.Tensor) -> torch.Tensor:
+    def forward(self, input_data: torch.Tensor) -> torch.Tensor:
         """
         Forward pass for the LIFNeuronGroup in PyTorch.
 
-        :param input_current: Input tensor of shape (batch_size, num_neurons) or (timesteps, batch_size, num_neurons).
+        :param input_data: Input tensor of shape (batch_size, num_neurons) or (timesteps, batch_size, num_neurons).
         :return: Spike tensor (binary) of shape (batch_size, num_neurons) or (timesteps, batch_size, num_neurons).
         """
-        # Time-dependent simulation
-        if len(input_current.shape) == 3:
-            timesteps, batch_size, num_neurons = input_current.shape
+        if self.spike_coding == "rate":
+            # Specific for rate coding, when e.g. using images as input
+            input_data = (torch.rand_like(input_data) < (input_data / 255.0)).float()
+
+        if len(input_data.shape) == 3:
+            timesteps, batch_size, num_neurons = input_data.shape
             assert batch_size == self.lif_group.batch_size, \
                 f"Batch size must match ({self.lif_group.batch_size})."
             assert num_neurons == self.lif_group.num_neurons, \
@@ -71,14 +95,12 @@ class LIFLayer(nn.Module):
 
             output_spikes = []
             for t in range(timesteps):
-                spikes = self.lif_group.step(input_current[t])
+                spikes = self.lif_group.step(input_data[t])
                 output_spikes.append(spikes)
 
             return torch.stack(output_spikes, dim=0)
-        # Static input
         else:
-            assert input_current.shape == (self.lif_group.batch_size, self.lif_group.num_neurons), \
+            assert input_data.shape == (self.lif_group.batch_size, self.lif_group.num_neurons), \
                 f"Input tensor shape must match (batch_size={self.lif_group.batch_size}, num_neurons={self.lif_group.num_neurons})."
 
-            return self.lif_group.step(input_current)
-
+            return self.lif_group.step(input_data)
