@@ -68,7 +68,7 @@ Clone this repository and install the required dependencies:
 
 ```bash
 pip install -r requirements.txt
-pip install .
+pip install -e .
 ```
 
 ### PyTorch Integration
