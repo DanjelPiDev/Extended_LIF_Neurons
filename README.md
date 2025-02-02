@@ -21,11 +21,32 @@ and a comparison of spiking behaviors between neuron types.
 ---
 
 ## Changelog
+### v0.3
+- **Surrogate Gradient:** Added surrogate gradient for backpropagation through time in LIF neurons, available as `surrogate_gradient_function` parameter `heaviside`, `fast_sigmoid`, `gaussian`, and `arctan`. Below are the spike raster and membrane potential plots for each surrogate gradient (`alpha` = 0.5):
+<div align="center">
+  <img src="./src/Images/spike_raster_heaviside.png" width="400">
+  <img src="./src/Images/membrane_potential_heaviside.png" width="500">
+</div>
+<div align="center">
+  <img src="./src/Images/spike_raster_fast_sigmoid.png" width="400">
+  <img src="./src/Images/membrane_potential_fast_sigmoid.png" width="500">
+</div>
+<div align="center">
+  <img src="./src/Images/spike_raster_gaussian.png" width="400">
+  <img src="./src/Images/membrane_potential_gaussian.png" width="500">
+</div>
+<div align="center">
+  <img src="./src/Images/spike_raster_arctan.png" width="400">
+  <img src="./src/Images/membrane_potential_arctan.png" width="500">
+</div>
+
+- **Removed Single Neuron Simulation:** Removed the single neuron simulation in favor of the vectorized implementation.
+
+### v0.2
 - **Noise Support:** Gaussian noise can now be added to the membrane potential, improving biological realism.
 - **Adaptive Thresholds:** Thresholds increase dynamically after a spike and decay over time, with configurable limits using `min_threshold` and `max_threshold`.
 - **Vectorized LIFNeuronGroup:** Efficient simulation of multiple neurons with parallel processing, supporting batch inputs.
 - **PyTorch Integration:** Added `TorchLIFNeuronGroup` for seamless integration of vectorized neuron simulations into PyTorch models.
-
 In the following images, you can see the threshold stochastic and LIF neuron group simulations with 100 neurons each:
 <div align="center">
   <img src="./src/Images/Threshold_Stochastic.png" width="400">

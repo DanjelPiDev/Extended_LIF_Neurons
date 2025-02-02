@@ -1,6 +1,8 @@
 import numpy as np
 import torch
 
+from lif.sg.spike_function import SpikeFunction
+
 
 class LIFNeuronGroup:
     """
@@ -20,7 +22,9 @@ class LIFNeuronGroup:
                  min_threshold: float = 0.5,
                  max_threshold: float = 2.0,
                  batch_size: int = 1,
-                 device: str = "cpu",):
+                 device: str = "cpu",
+                 surrogate_gradient_function: str = "heaviside",
+                 alpha: float = 1.0,):
         """
         Initialize the LIF neuron group with its parameters.
 
@@ -34,6 +38,10 @@ class LIFNeuronGroup:
         :param stochastic: Whether to enable stochastic firing.
         :param min_threshold: Minimum threshold value.
         :param max_threshold: Maximum threshold value.
+        :param batch_size: Batch size for the input data.
+        :param device: Device to run the simulation on.
+        :param surrogate_gradient_function: Surrogate gradient function for backpropagation.
+        :param alpha: Parameter for the surrogate gradient function.
         """
         if stochastic:
             assert noise_std > 0, "Noise standard deviation must be positive in stochastic mode."
@@ -45,6 +53,9 @@ class LIFNeuronGroup:
         assert dt > 0, "Time step (dt) must be positive."
         assert batch_size > 0, "Batch size must be positive."
         assert device in ["cpu", "cuda"], "Device must be either 'cpu' or 'cuda'."
+        assert surrogate_gradient_function in ["heaviside", "fast_sigmoid", "gaussian", "arctan"], \
+            "Surrogate gradient function must be one of 'heaviside', 'fast_sigmoid', 'gaussian', 'arctan'."
+        assert alpha > 0, "Alpha must be positive."
 
         self.batch_size = batch_size
         self.device = device
@@ -60,9 +71,16 @@ class LIFNeuronGroup:
         self.use_adaptive_threshold = use_adaptive_threshold
         self.noise_std = torch.tensor(noise_std, device=device)
         self.stochastic = stochastic
+        self.surrogate_gradient_function = surrogate_gradient_function
+        self.alpha = torch.tensor(alpha, device=device)
 
         self.min_threshold = min_threshold
         self.max_threshold = max_threshold
+
+    def reset_state(self, initial_threshold=1.0):
+        self.V.fill_(0.0)
+        self.V_th.fill_(initial_threshold)
+        self.spikes.zero_()
 
     def step(self, I: torch.Tensor) -> torch.Tensor:
         """
@@ -83,15 +101,15 @@ class LIFNeuronGroup:
             spike_prob = self.sigmoid(self.V - self.V_th)
             self.spikes = torch.rand_like(self.V, device=self.device) < spike_prob
         else:
-            self.spikes = self.V >= self.V_th
+            self.spikes = SpikeFunction.apply(self.V - self.V_th, self.surrogate_gradient_function, self.alpha)
 
-        self.V[self.spikes] = self.V_reset
+        self.V[self.spikes.bool()] = self.V_reset
 
         if self.use_adaptive_threshold:
             # Increase threshold for spiking neurons
-            self.V_th[self.spikes] += self.eta
+            self.V_th[self.spikes.bool()] += self.eta
             # Decay threshold
-            self.V_th[~self.spikes] -= self.eta * (self.V_th[~self.spikes] - 1.0)
+            self.V_th[~self.spikes.bool()] -= self.eta * (self.V_th[~self.spikes.bool()] - 1.0)
 
         # Clip threshold to the specified range
         self.V_th = torch.clamp(self.V_th, self.min_threshold, self.max_threshold)

@@ -2,38 +2,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 
-from lif.lif_neuron import LIFNeuron
 from lif.lif_neuron_group import LIFNeuronGroup
-
-
-@DeprecationWarning
-class SingleLIFLayer(nn.Module):
-    """
-    Not recommended for large neuron counts, use LIFLayer (wrapper for the LIFNeuronGroup) instead.
-
-    PyTorch-compatible LIF layer that wraps the LIFNeuron class.
-    """
-
-    def __init__(self, num_neurons, V_th=1.0, V_reset=0.0, tau=20.0, dt=1.0):
-        super(SingleLIFLayer, self).__init__()
-        self.num_neurons = num_neurons
-        self.neurons = [LIFNeuron(V_th, V_reset, tau, dt) for _ in range(num_neurons)]
-
-    def forward(self, input_current):
-        """
-        Forward pass for LIF neurons.
-
-        :param input_current: Input tensor of shape (batch_size, num_neurons).
-        :return: Spike tensor (binary) of shape (batch_size, num_neurons).
-        """
-        batch_size = input_current.size(0)
-        output_spikes = []
-
-        for i in range(batch_size):
-            spikes = [neuron.step(I) for neuron, I in zip(self.neurons, input_current[i].tolist())]
-            output_spikes.append(spikes)
-
-        return torch.tensor(output_spikes, dtype=torch.float32)
 
 
 class LIFLayer(nn.Module):
@@ -55,7 +24,27 @@ class LIFLayer(nn.Module):
                  max_threshold=2.0,
                  batch_size=1,
                  device="cuda",
-                 spike_coding=None):
+                 spike_coding=None,
+                 surrogate_gradient_function="heaviside",
+                 alpha=1.0,):
+        """
+        Initialize the LIF neuron group with its parameters.
+
+        :param num_neurons: Number of neurons in the group.
+        :param V_th: Initial threshold voltage for all neurons.
+        :param V_reset: Reset voltage after a spike.
+        :param tau: Membrane time constant, controlling decay rate.
+        :param dt: Time step for updating the membrane potential.
+        :param eta: Adaptation rate for the threshold voltage.
+        :param noise_std: Standard deviation of Gaussian noise added to the membrane potential.
+        :param stochastic: Whether to enable stochastic firing.
+        :param min_threshold: Minimum threshold value.
+        :param max_threshold: Maximum threshold value.
+        :param batch_size: Batch size for the input data.
+        :param device: Device to run the simulation on.
+        :param surrogate_gradient_function: Surrogate gradient function for backpropagation.
+        :param alpha: Parameter for the surrogate gradient function.
+        """
         super(LIFLayer, self).__init__()
 
         self.lif_group = LIFNeuronGroup(
@@ -71,7 +60,9 @@ class LIFLayer(nn.Module):
             min_threshold=min_threshold,
             max_threshold=max_threshold,
             batch_size=batch_size,
-            device=device
+            device=device,
+            surrogate_gradient_function=surrogate_gradient_function,
+            alpha=alpha,
         )
         self.spike_coding = spike_coding
 
@@ -82,9 +73,7 @@ class LIFLayer(nn.Module):
         :param input_data: Input tensor of shape (batch_size, num_neurons) or (timesteps, batch_size, num_neurons).
         :return: Spike tensor (binary) of shape (batch_size, num_neurons) or (timesteps, batch_size, num_neurons).
         """
-        if self.spike_coding == "rate":
-            # Specific for rate coding, when e.g. using images as input
-            input_data = (torch.rand_like(input_data) < (input_data / 255.0)).float()
+        self.lif_group.reset_state()
 
         if len(input_data.shape) == 3:
             timesteps, batch_size, num_neurons = input_data.shape
