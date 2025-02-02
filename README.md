@@ -28,7 +28,7 @@ The LIFNeuronGroup is a spiking neuron model that integrates multiple biological
 | **Adaptive Threshold (V_th)** | The firing threshold that can adapt based on recent activity. It increases when the neuron spikes and decays back toward baseline otherwise. | Clamped between `min_threshold` and `max_threshold`; updated using `eta`. |
 | **Spike Generation**        | Determines when the neuron fires. For a hard threshold, a spike is generated when `V - V_th >= 0`. In stochastic mode, a spike probability is computed (using either a static sigmoid or a dynamic spike probability module) and sampled. | Output is a binary spike tensor. Deterministic mode uses a hard threshold; stochastic mode uses probability. |
 | **Dynamic Spike Probability** | Optionally computes the spike probability dynamically based on recent spike history, which results in variable excitability even for the same input. | Enabled by setting `allow_dynamic_spike_probability`; controlled by `base_alpha` and `tau_adapt`. |
-| **Surrogate Gradient Function** | Used during training for backpropagation. Approximates the derivative of the non-differentiable spike activation function. Options include "heaviside", "fast_sigmoid", "gaussian", and "arctan". | Specified via `surrogate_gradient_function` and parameter `alpha`. |
+| **Surrogate Gradient Function** | Used during training for backpropagation. Approximates the derivative of the non-differentiable spike activation function. Options include `heaviside`, `fast_sigmoid`, `gaussian`, and `arctan`. | Specified via `surrogate_gradient_function` and parameter `alpha`. |
 
 ## How It Works
 
