@@ -2,6 +2,7 @@ import numpy as np
 import torch
 
 from lif.sg.spike_function import SpikeFunction
+from lif.probability.dynamic_spike_probability import DynamicSpikeProbability
 
 
 class LIFNeuronGroup:
@@ -24,7 +25,11 @@ class LIFNeuronGroup:
                  batch_size: int = 1,
                  device: str = "cpu",
                  surrogate_gradient_function: str = "heaviside",
-                 alpha: float = 1.0,):
+                 alpha: float = 1.0,
+                 allow_dynamic_spike_probability: bool = False,
+                 base_alpha: float = 2.0,
+                 tau_adapt: float = 20.0,
+                 neuromod_transform=None):
         """
         Initialize the LIF neuron group with its parameters.
 
@@ -42,6 +47,12 @@ class LIFNeuronGroup:
         :param device: Device to run the simulation on.
         :param surrogate_gradient_function: Surrogate gradient function for backpropagation.
         :param alpha: Parameter for the surrogate gradient function.
+        :param allow_dynamic_spike_probability: Whether to allow dynamic spike probability, this takes the last spike into account. Works like a self-locking mechanism.
+        :param base_alpha: Base alpha value for the dynamic sigmoid function.
+        :param tau_adapt: Time constant for the adaptation.
+        :param neuromod_transform: A function or module that takes an external modulation tensor (e.g. reward/error signal)
+            and returns a transformed tensor (e.g. modulation factors in [0,1]).
+            If None, a default sigmoid transformation will be applied.
         """
         if stochastic:
             assert noise_std > 0, "Noise standard deviation must be positive in stochastic mode."
@@ -73,45 +84,87 @@ class LIFNeuronGroup:
         self.stochastic = stochastic
         self.surrogate_gradient_function = surrogate_gradient_function
         self.alpha = torch.tensor(alpha, device=device)
+        self.allow_dynamic_spike_probability = allow_dynamic_spike_probability
+        self.dynamic_spike_probability = DynamicSpikeProbability(base_alpha=base_alpha, tau_adapt=tau_adapt).to(device) if allow_dynamic_spike_probability else None
 
         self.min_threshold = min_threshold
         self.max_threshold = max_threshold
+
+        # Dynamic forward pass variables
+        self.adaptation_current = torch.zeros((batch_size, num_neurons), device=device)
+        self.synaptic_efficiency = torch.ones((batch_size, num_neurons), device=device)
+        self.neuromodulator = torch.ones((batch_size, num_neurons), device=device)
+
+        # Parameters for updating dynamic variables.
+        self.adaptation_decay = torch.tensor(0.9, device=device)    # Decay factor for adaptation current.
+        self.spike_increase = torch.tensor(0.5, device=device)      # Increase in adaptation current upon spiking.
+        self.depression_rate = torch.tensor(0.1, device=device)     # Synaptic depression factor.
+        self.recovery_rate = torch.tensor(0.05, device=device)      # Rate at which synaptic efficiency recovers.
+
+        self.neuromod_transform = neuromod_transform
 
     def reset_state(self, initial_threshold=1.0):
         self.V.fill_(0.0)
         self.V_th.fill_(initial_threshold)
         self.spikes.zero_()
 
-    def step(self, I: torch.Tensor) -> torch.Tensor:
+        self.adaptation_current.fill_(0.0)
+        self.synaptic_efficiency.fill_(1.0)
+        self.neuromodulator.fill_(1.0)
+
+    def step(self, I: torch.Tensor, external_modulation: torch.Tensor = None) -> torch.Tensor:
         """
         Simulate one time step for all neurons in the group.
 
         :param I: Tensor of input currents with shape (batch_size, num_neurons).
+        :param external_modulation: Tensor of external neuromodulatory signals with shape
+                                    (batch_size, num_neurons) or broadcastable shape.
+                                    For example, this could encode a reward signal for dopamine modulation.
         :return: Spike tensor (binary) of shape (batch_size, num_neurons).
         """
         assert I.shape == (self.batch_size, self.num_neurons), \
             "Input current shape must match (batch_size, num_neurons)."
 
+        if external_modulation is not None:
+            # For instance, it can simulate a dopamine-like effect:
+            #       - High reward --> high dopamine --> increased excitability or enhanced learning.
+            #       - Low reward / negative error --> low dopamine --> reduced excitability.
+            if self.neuromod_transform is not None:
+                self.neuromodulator = self.neuromod_transform(external_modulation)
+            else:
+                self.neuromodulator = torch.sigmoid(external_modulation)
+
         noise = torch.normal(0, self.noise_std.item(), size=I.shape, device=self.device) if self.stochastic else torch.zeros_like(I)
 
-        dV = (I - self.V) / self.tau
+        # Modify the input current with dynamic factors:
+        # - Multiply by synaptic efficiency (depressed if previous spikes occurred)
+        # - Add neuromodulatory effect (could boost or reduce excitability)
+        # - Subtract adaptation current (reducing excitability after spiking)
+        I_effective = I * self.synaptic_efficiency + self.neuromodulator - self.adaptation_current
+
+        dV = (I_effective - self.V) / self.tau
         self.V += dV * self.dt + noise / self.V_th
 
         if self.stochastic:
-            spike_prob = self.sigmoid(self.V - self.V_th)
+            if not self.allow_dynamic_spike_probability:
+                spike_prob = self.sigmoid(self.V - self.V_th)
+            else:
+                spike_prob = self.dynamic_spike_probability(self.V - self.V_th, self.spikes)
             self.spikes = torch.rand_like(self.V, device=self.device) < spike_prob
         else:
             self.spikes = SpikeFunction.apply(self.V - self.V_th, self.surrogate_gradient_function, self.alpha)
 
         self.V[self.spikes.bool()] = self.V_reset
 
-        if self.use_adaptive_threshold:
-            # Increase threshold for spiking neurons
-            self.V_th[self.spikes.bool()] += self.eta
-            # Decay threshold
-            self.V_th[~self.spikes.bool()] -= self.eta * (self.V_th[~self.spikes.bool()] - 1.0)
+        # Update the adaptation current: decay it and add an increment for neurons that spiked
+        self.adaptation_current = self.adaptation_current * self.adaptation_decay + self.spike_increase * self.spikes.float()
+        # Update synaptic efficiency: depress on spike and allow recovery towards 1
+        self.synaptic_efficiency = self.synaptic_efficiency * (1 - self.depression_rate * self.spikes.float()) \
+                                   + self.recovery_rate * (1 - self.synaptic_efficiency)
 
-        # Clip threshold to the specified range
+        if self.use_adaptive_threshold:
+            self.V_th[self.spikes.bool()] += self.eta
+            self.V_th[~self.spikes.bool()] -= self.eta * (self.V_th[~self.spikes.bool()] - 1.0)
         self.V_th = torch.clamp(self.V_th, self.min_threshold, self.max_threshold)
 
         return self.spikes

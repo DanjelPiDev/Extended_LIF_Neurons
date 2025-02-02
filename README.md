@@ -21,6 +21,12 @@ and a comparison of spiking behaviors between neuron types.
 ---
 
 ## Changelog
+### v0.35
+- **Dynamic forward pass:** `adaptation_current`, `synaptic_efficiency`, and `neuromodulator`.
+  - **neuromod_transform:** A function or module that takes an external modulation tensor (e.g. reward/error signal)
+    and returns a transformed tensor (e.g. modulation factors in [0,1]).
+    If None, a default sigmoid transformation will be applied.
+
 ### v0.3
 - **Surrogate Gradient:** Added surrogate gradient for backpropagation through time in LIF neurons, available as `surrogate_gradient_function` parameter `heaviside`, `fast_sigmoid`, `gaussian`, and `arctan`. Below are the spike raster and membrane potential plots for each surrogate gradient (`alpha` = 0.5):
 <div align="center">
