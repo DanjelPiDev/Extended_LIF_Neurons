@@ -8,8 +8,7 @@
 
 ---
 
-This repository implements spiking neural networks using 
-**Leaky Integrate-and-Fire (LIF)** neurons. The simulations 
+This repository implements **Leaky Integrate-and-Fire (LIF)** neurons. The simulations 
 include membrane potential tracking, spike generation, 
 and a comparison of spiking behaviors between neuron types.
 
