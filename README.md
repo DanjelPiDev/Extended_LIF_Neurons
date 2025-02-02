@@ -1,4 +1,4 @@
-# LIF Neuron Simulation
+# Extended LIF Neuron
 
 ### 🚀 Development Notes
 > ⚡ I developed my own implementation of LIF neurons because the 
