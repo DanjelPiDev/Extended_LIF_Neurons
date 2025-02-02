@@ -13,10 +13,54 @@ This repository implements spiking neural networks using
 include membrane potential tracking, spike generation, 
 and a comparison of spiking behaviors between neuron types.
 
-## Key Features
-- Simulation of **LIF neurons** with voltage decay, threshold-based spiking, probabilistic spike generation, and membrane reset.
-- Visualization of membrane potentials and spike trains for single and multiple neurons.
-- PyTorch-compatible layers for integration into neural network models.
+# Overview
+The LIFNeuronGroup is a spiking neuron model that integrates multiple biological features into its forward pass. It processes various inputs and internal states to produce realistic, dynamic spiking behavior. The model incorporates mechanisms such as membrane potential dynamics, adaptation, synaptic short-term plasticity, neuromodulation, and (optionally) dynamic spike probability. Below is a summary of what the neuron can process and how it works.
+
+## Summary Table
+
+| Feature                     | Description                                                                                         | Parameters / Inputs                                     |
+|-----------------------------|-------------------------------------------------------------------------------------------------|------------------------------------------------------|
+| **Input Current (I)**       | The raw external current driving the neuron.                                                     | Tensor of shape (batch_size, num_neurons).           |
+| **External Modulation**     | An optional external signal (e.g., reward, error, dopamine-like signal) that modulates the neuron's excitability. It is processed through a user-supplied transformation function (neuromod_transform) or defaults to a sigmoid. | Tensor of shape broadcastable to (batch_size, num_neurons). |
+| **Membrane Potential (V)**  | Represents the neuron's current voltage. Updated at each timestep based on the effective input. When a spike occurs, V is reset to V_reset. | Updated using the equation: `V += ((I_effective - V) / tau) * dt + noise/V_th`. |
+| **Effective Input (I_effective)** | Combines the raw input with dynamic modulations: <br>• **Synaptic Efficiency**: Scales the input (models short-term plasticity).<br>• **Neuromodulator**: Adds context-dependent excitability.<br>• **Adaptation Current**: Subtracts to model refractoriness. | Computed as: `I_effective = I * synaptic_efficiency + neuromodulator - adaptation_current`. |
+| **Synaptic Efficiency**     | Models short-term synaptic plasticity (depression and recovery). Depressed when a neuron spikes and recovers over time. | Updated via `depression_rate` (upon spiking) and `recovery_rate` (recovery toward 1). |
+| **Adaptation Current**      | Simulates internal adaptation (e.g., due to ion concentration changes). Increases when the neuron spikes and decays over time, reducing excitability immediately after a spike. | Updated using `adaptation_decay` and `spike_increase`. |
+| **Adaptive Threshold (V_th)** | The firing threshold that can adapt based on recent activity. It increases when the neuron spikes and decays back toward baseline otherwise. | Clamped between `min_threshold` and `max_threshold`; updated using `eta`. |
+| **Spike Generation**        | Determines when the neuron fires. For a hard threshold, a spike is generated when `V - V_th >= 0`. In stochastic mode, a spike probability is computed (using either a static sigmoid or a dynamic spike probability module) and sampled. | Output is a binary spike tensor. Deterministic mode uses a hard threshold; stochastic mode uses probability. |
+| **Dynamic Spike Probability** | Optionally computes the spike probability dynamically based on recent spike history, which results in variable excitability even for the same input. | Enabled by setting `allow_dynamic_spike_probability`; controlled by `base_alpha` and `tau_adapt`. |
+| **Surrogate Gradient Function** | Used during training for backpropagation. Approximates the derivative of the non-differentiable spike activation function. Options include "heaviside", "fast_sigmoid", "gaussian", and "arctan". | Specified via `surrogate_gradient_function` and parameter `alpha`. |
+
+## How It Works
+
+### Input Processing
+- **I (Input Current):** The neuron receives a raw current, which is the primary drive.
+- **External Modulation:** Optionally, an external signal (e.g., representing a reward or dopamine level) is provided. This signal is transformed (using a user-defined `neuromod_transform` or a default sigmoid) to produce a modulation factor that influences neuronal excitability.
+
+### Effective Input Calculation
+The raw input is modified by internal dynamic factors:
+- **Synaptic Efficiency:** Scales down the input if previous spikes have occurred (modeling synaptic depression).
+- **Neuromodulator:** Adds a context-dependent boost (or reduction) to excitability.
+- **Adaptation Current:** Subtracts from the input to account for refractory periods after spiking.
+
+The effective input is computed as:
+```math
+I_{effective} = I * synaptic_{efficiency} + neuromodulator - adaptation_{current}
+```
+
+### Membrane Potential Update
+
+- The neuron's membrane potential V is updated based on the effective input, time constant tau, and any noise (if stochastic mode is enabled).
+- When V exceeds the adaptive threshold V_th, a spike is generated.
+- In deterministic (non-stochastic) mode, a hard threshold is applied; in stochastic mode, a probability is computed (either static or dynamic) and a spike is sampled.
+
+### Spike Generation & Reset
+
+- If a spike occurs, V is reset to V_reset.
+- The model then updates internal states:
+- Adaptation Current: Increases for spiking neurons and decays over time.
+- Synaptic Efficiency: Depresses upon spiking and recovers gradually.
+- Adaptive Threshold (V_th): Adjusts (increases upon spiking and decays when inactive).
 
 ---
 
