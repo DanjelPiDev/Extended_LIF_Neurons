@@ -30,8 +30,8 @@ class SpikeFunction(torch.autograd.Function):
         return 1 / ((1 + alpha * x.abs()) ** 2)
 
     @staticmethod
-    def gaussian(x, sigma: float = 1.0):
-        return torch.exp(-((x ** 2) / (2 * sigma ** 2)))
+    def gaussian(x, alpha: float = 1.0):
+        return torch.exp(-(x ** 2) / (2 * (alpha ** 2)))
 
     @staticmethod
     def arctan(x, alpha: float = 1.0):

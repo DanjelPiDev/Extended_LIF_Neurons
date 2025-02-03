@@ -10,6 +10,7 @@ class LIFNeuronGroup:
     A vectorized LIF neuron model for multiple neurons.
     Because the LIFNeuron is inefficient for large neuron counts.
     """
+
     def __init__(self,
                  num_neurons: int,
                  V_th: float = 1.0,
@@ -26,9 +27,13 @@ class LIFNeuronGroup:
                  device: str = "cpu",
                  surrogate_gradient_function: str = "heaviside",
                  alpha: float = 1.0,
-                 allow_dynamic_spike_probability: bool = False,
+                 allow_dynamic_spike_probability: bool = True,
                  base_alpha: float = 2.0,
                  tau_adapt: float = 20.0,
+                 adaptation_decay: float = 0.9,
+                 spike_increase: float = 0.5,
+                 depression_rate: float = 0.1,
+                 recovery_rate: float = 0.05,
                  neuromod_transform=None):
         """
         Initialize the LIF neuron group with its parameters.
@@ -50,15 +55,20 @@ class LIFNeuronGroup:
         :param allow_dynamic_spike_probability: Whether to allow dynamic spike probability, this takes the last spike into account. Works like a self-locking mechanism.
         :param base_alpha: Base alpha value for the dynamic sigmoid function.
         :param tau_adapt: Time constant for the adaptation.
+        :param adaptation_decay: Decay rate for the adaptation current.
+        :param spike_increase: Increment for the adaptation current on spike.
+        :param depression_rate: Rate of synaptic depression on spike.
+        :param recovery_rate: Rate of synaptic recovery after spike.
         :param neuromod_transform: A function or module that takes an external modulation tensor (e.g. reward/error signal)
             and returns a transformed tensor (e.g. modulation factors in [0,1]).
             If None, a default sigmoid transformation will be applied.
         """
+        assert num_neurons > 0, "Number of neurons must be positive."
+
         if stochastic:
             assert noise_std > 0, "Noise standard deviation must be positive in stochastic mode."
 
         assert tau > 0.0, "Membrane time constant must be positive."
-        assert num_neurons > 0, "Number of neurons must be positive."
         assert min_threshold > 0, "Minimum threshold must be positive."
         assert max_threshold > min_threshold, "Maximum threshold must be greater than the minimum threshold."
         assert dt > 0, "Time step (dt) must be positive."
@@ -67,6 +77,10 @@ class LIFNeuronGroup:
         assert surrogate_gradient_function in ["heaviside", "fast_sigmoid", "gaussian", "arctan"], \
             "Surrogate gradient function must be one of 'heaviside', 'fast_sigmoid', 'gaussian', 'arctan'."
         assert alpha > 0, "Alpha must be positive."
+        assert adaptation_decay >= 0, "adaptation_decay must be non-negative."
+        assert spike_increase >= 0, "spike_increase must be non-negative."
+        assert 0 <= depression_rate <= 1, "depression_rate must be in [0, 1]."
+        assert recovery_rate >= 0, "recovery_rate must be non-negative."
 
         self.batch_size = batch_size
         self.device = device
@@ -85,7 +99,12 @@ class LIFNeuronGroup:
         self.surrogate_gradient_function = surrogate_gradient_function
         self.alpha = torch.tensor(alpha, device=device)
         self.allow_dynamic_spike_probability = allow_dynamic_spike_probability
-        self.dynamic_spike_probability = DynamicSpikeProbability(base_alpha=base_alpha, tau_adapt=tau_adapt).to(device) if allow_dynamic_spike_probability else None
+        self.dynamic_spike_probability = self.dynamic_spike_probability = DynamicSpikeProbability(
+            base_alpha=base_alpha,
+            tau_adapt=tau_adapt,
+            batch_size=batch_size,
+            num_neurons=num_neurons
+        ).to(device) if allow_dynamic_spike_probability else None
 
         self.min_threshold = min_threshold
         self.max_threshold = max_threshold
@@ -96,21 +115,24 @@ class LIFNeuronGroup:
         self.neuromodulator = torch.ones((batch_size, num_neurons), device=device)
 
         # Parameters for updating dynamic variables.
-        self.adaptation_decay = torch.tensor(0.9, device=device)    # Decay factor for adaptation current.
-        self.spike_increase = torch.tensor(0.5, device=device)      # Increase in adaptation current upon spiking.
-        self.depression_rate = torch.tensor(0.1, device=device)     # Synaptic depression factor.
-        self.recovery_rate = torch.tensor(0.05, device=device)      # Rate at which synaptic efficiency recovers.
+        self.adaptation_decay = torch.tensor(adaptation_decay, device=device)
+        self.spike_increase = torch.tensor(spike_increase, device=device)
+        self.depression_rate = torch.tensor(depression_rate, device=device)
+        self.recovery_rate = torch.tensor(recovery_rate, device=device)
 
         self.neuromod_transform = neuromod_transform
 
-    def reset_state(self, initial_threshold=1.0):
-        self.V.fill_(0.0)
-        self.V_th.fill_(initial_threshold)
+    def reset_state(self, initial_V=None, initial_V_th=1.0, initial_adaptation=0.0,
+                    initial_synaptic=1.0, initial_neuromod=1.0):
+        if initial_V is not None:
+            self.V = initial_V.to(self.device)
+        else:
+            self.V.fill_(0.0)
+        self.V_th.fill_(initial_V_th)
         self.spikes.zero_()
-
-        self.adaptation_current.fill_(0.0)
-        self.synaptic_efficiency.fill_(1.0)
-        self.neuromodulator.fill_(1.0)
+        self.adaptation_current.fill_(initial_adaptation)
+        self.synaptic_efficiency.fill_(initial_synaptic)
+        self.neuromodulator.fill_(initial_neuromod)
 
     def step(self, I: torch.Tensor, external_modulation: torch.Tensor = None) -> torch.Tensor:
         """
@@ -124,6 +146,9 @@ class LIFNeuronGroup:
         """
         assert I.shape == (self.batch_size, self.num_neurons), \
             "Input current shape must match (batch_size, num_neurons)."
+        if external_modulation is not None:
+            assert external_modulation.shape == (self.batch_size, self.num_neurons) or external_modulation.ndim == 0, \
+                "external_modulation must be broadcastable to (batch_size, num_neurons)."
 
         if external_modulation is not None:
             # For instance, it can simulate a dopamine-like effect:
@@ -134,7 +159,7 @@ class LIFNeuronGroup:
             else:
                 self.neuromodulator = torch.sigmoid(external_modulation)
 
-        noise = torch.normal(0, self.noise_std.item(), size=I.shape, device=self.device) if self.stochastic else torch.zeros_like(I)
+        noise = torch.randn_like(I) * self.noise_std if self.stochastic else torch.zeros_like(I)
 
         # Modify the input current with dynamic factors:
         # - Multiply by synaptic efficiency (depressed if previous spikes occurred)
