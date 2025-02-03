@@ -110,13 +110,13 @@ class LIFLayer(nn.Module):
             assert external_modulation.ndim == 2, f"External mod should be (batch, neurons), got {external_modulation.shape}"
             neuromodulator = self._apply_neuromod_transform(external_modulation)
 
-        # 2. Compute effective current with noise
+        # Compute effective current with noise
         noise = torch.randn_like(I) * self.lif_group.noise_std if self.lif_group.stochastic else 0
         I_effective = I * synaptic_efficiency + neuromodulator - adaptation_current
         dV = (I_effective - V) / self.lif_group.tau
         V = V + dV * self.lif_group.dt + noise
 
-        # 3. Compute spike probabilities (BEFORE determining spikes)
+        # Compute spike probabilities (BEFORE determining spikes)
         if self.lif_group.stochastic:
             if self.lif_group.allow_dynamic_spike_probability:
                 # Use PREVIOUS spikes for adaptation
@@ -129,15 +129,15 @@ class LIFLayer(nn.Module):
         else:
             spikes = SpikeFunction.apply(V - V_th, self.lif_group.surrogate_gradient_function, self.lif_group.alpha)
 
-        # 4. Reset membrane potential
+        # Reset membrane potential
         V = torch.where(spikes.bool(), self.lif_group.V_reset, V)
 
-        # 5. Update threshold, adaptation, etc. (same as before)
+        # Update threshold, adaptation, etc. (same as before)
         if self.lif_group.use_adaptive_threshold:
             V_th = torch.where(spikes.bool(), V_th + self.lif_group.eta, V_th - self.lif_group.eta * (V_th - 1.0))
         V_th = torch.clamp(V_th, self.lif_group.min_threshold, self.lif_group.max_threshold)
 
-        # 6. Update adaptation and synaptic efficiency
+        # Update adaptation and synaptic efficiency
         adaptation_current = adaptation_current * self.lif_group.adaptation_decay + self.lif_group.spike_increase * spikes.float()
         synaptic_efficiency = (
                 synaptic_efficiency * (1 - self.lif_group.depression_rate * spikes.float()) +
