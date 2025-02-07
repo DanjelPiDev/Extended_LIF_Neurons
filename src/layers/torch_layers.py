@@ -27,7 +27,7 @@ class LIFLayer(nn.Module):
                  min_threshold=0.5,
                  max_threshold=2.0,
                  batch_size=1,
-                 device="cuda",
+                 device=torch.device("cpu"),
                  spike_coding=None,
                  surrogate_gradient_function="heaviside",
                  alpha=1.0,

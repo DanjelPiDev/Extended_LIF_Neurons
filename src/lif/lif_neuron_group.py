@@ -73,7 +73,7 @@ class LIFNeuronGroup:
         assert max_threshold > min_threshold, "Maximum threshold must be greater than the minimum threshold."
         assert dt > 0, "Time step (dt) must be positive."
         assert batch_size > 0, "Batch size must be positive."
-        assert device in [torch.device("cpu"), torch.device("cuda")], "Device must be either 'cpu' or 'cuda'."
+        assert device in [torch.device("cpu"), torch.device("cuda")], "Device must be either 'torch.device('cpu')' or 'torch.device('cuda')'."
         assert surrogate_gradient_function in ["heaviside", "fast_sigmoid", "gaussian", "arctan"], \
             "Surrogate gradient function must be one of 'heaviside', 'fast_sigmoid', 'gaussian', 'arctan'."
         assert alpha > 0, "Alpha must be positive."
