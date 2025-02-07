@@ -170,7 +170,7 @@ class LIFNeuronGroup:
         I_effective = I * self.synaptic_efficiency + self.neuromodulator - self.adaptation_current
 
         dV = (I_effective - self.V) / self.tau
-        self.V = (self.V + dV * self.dt + noise / self.V_th).detach()
+        self.V = self.V + dV * self.dt + noise / self.V_th
 
         if self.stochastic:
             if not self.allow_dynamic_spike_probability:

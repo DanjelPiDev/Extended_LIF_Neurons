@@ -27,7 +27,7 @@ class LIFLayer(nn.Module):
                  min_threshold=0.5,
                  max_threshold=2.0,
                  batch_size=1,
-                 device="cpu",
+                 device="cuda",
                  spike_coding=None,
                  surrogate_gradient_function="heaviside",
                  alpha=1.0,
@@ -144,13 +144,7 @@ class LIFLayer(nn.Module):
                 self.lif_group.recovery_rate * (1 - synaptic_efficiency)
         )
 
-        return (
-            spikes.detach(),
-            V.detach(),
-            V_th.detach(),
-            adaptation_current.detach(),
-            synaptic_efficiency.detach()
-        )
+        return spikes, V, V_th, adaptation_current, synaptic_efficiency
 
     def forward(self, input_data: torch.Tensor, external_modulation: torch.Tensor = None) -> tuple[Tensor, Tensor]:
         """
@@ -213,9 +207,9 @@ class LIFLayer(nn.Module):
             prev_spikes = spikes
 
         # Update the neuron group's internal states
-        self.lif_group.V = V
-        self.lif_group.V_th = V_th
-        self.lif_group.adaptation_current = adaptation_current
-        self.lif_group.synaptic_efficiency = synaptic_efficiency
+        self.lif_group.V = V.detach()
+        self.lif_group.V_th = V_th.detach()
+        self.lif_group.adaptation_current = adaptation_current.detach()
+        self.lif_group.synaptic_efficiency = synaptic_efficiency.detach()
 
         return output_spikes, voltages
