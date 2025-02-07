@@ -123,6 +123,11 @@ pip install -r requirements.txt
 pip install -e .
 ```
 
+or just use the following command inside your project:
+```bash
+pip install git+https://github.com/NullPointerExcy/Extended_LIF_Neurons
+```
+
 #### PyTorch Integration
 
 This repository also includes PyTorch-compatible layers for
@@ -131,7 +136,7 @@ LIFLayer class with PyTorch:
 
 ```python
 import torch
-from extended_lif_neurons.layers.torch_layers import LIFLayer
+from layers.torch_layers import LIFLayer
 
 # Initialize neuron group
 lif = LIFLayer(
