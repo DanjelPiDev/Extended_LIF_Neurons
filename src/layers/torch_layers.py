@@ -27,7 +27,7 @@ class LIFLayer(nn.Module):
                  min_threshold=0.5,
                  max_threshold=2.0,
                  batch_size=1,
-                 device=torch.device("cpu"),
+                 device="cpu",
                  spike_coding=None,
                  surrogate_gradient_function="heaviside",
                  alpha=1.0,
@@ -144,7 +144,13 @@ class LIFLayer(nn.Module):
                 self.lif_group.recovery_rate * (1 - synaptic_efficiency)
         )
 
-        return spikes, V, V_th, adaptation_current, synaptic_efficiency
+        return (
+            spikes.detach(),
+            V.detach(),
+            V_th.detach(),
+            adaptation_current.detach(),
+            synaptic_efficiency.detach()
+        )
 
     def forward(self, input_data: torch.Tensor, external_modulation: torch.Tensor = None) -> tuple[Tensor, Tensor]:
         """

@@ -24,7 +24,7 @@ class LIFNeuronGroup:
                  min_threshold: float = 0.5,
                  max_threshold: float = 2.0,
                  batch_size: int = 1,
-                 device: torch.device = torch.device("cpu"),
+                 device: str = "cpu",
                  surrogate_gradient_function: str = "heaviside",
                  alpha: float = 1.0,
                  allow_dynamic_spike_probability: bool = True,
@@ -73,7 +73,7 @@ class LIFNeuronGroup:
         assert max_threshold > min_threshold, "Maximum threshold must be greater than the minimum threshold."
         assert dt > 0, "Time step (dt) must be positive."
         assert batch_size > 0, "Batch size must be positive."
-        assert device in [torch.device("cpu"), torch.device("cuda")], "Device must be either 'torch.device('cpu')' or 'torch.device('cuda')'."
+        assert device in ["cpu", "cuda"], "Device must be either 'torch.device('cpu')' or 'torch.device('cuda')'."
         assert surrogate_gradient_function in ["heaviside", "fast_sigmoid", "gaussian", "arctan"], \
             "Surrogate gradient function must be one of 'heaviside', 'fast_sigmoid', 'gaussian', 'arctan'."
         assert alpha > 0, "Alpha must be positive."
@@ -81,6 +81,8 @@ class LIFNeuronGroup:
         assert spike_increase >= 0, "spike_increase must be non-negative."
         assert 0 <= depression_rate <= 1, "depression_rate must be in [0, 1]."
         assert recovery_rate >= 0, "recovery_rate must be non-negative."
+
+        self.device = torch.device(device)
 
         self.batch_size = batch_size
         self.device = device
@@ -168,7 +170,7 @@ class LIFNeuronGroup:
         I_effective = I * self.synaptic_efficiency + self.neuromodulator - self.adaptation_current
 
         dV = (I_effective - self.V) / self.tau
-        self.V += dV * self.dt + noise / self.V_th
+        self.V = (self.V + dV * self.dt + noise / self.V_th).detach()
 
         if self.stochastic:
             if not self.allow_dynamic_spike_probability:
@@ -182,14 +184,14 @@ class LIFNeuronGroup:
         self.V[self.spikes.bool()] = self.V_reset
 
         # Update the adaptation current: decay it and add an increment for neurons that spiked
-        self.adaptation_current = self.adaptation_current * self.adaptation_decay + self.spike_increase * self.spikes.float()
+        self.adaptation_current = (self.adaptation_current * self.adaptation_decay +
+                                   self.spike_increase * self.spikes.float()).detach()
         # Update synaptic efficiency: depress on spike and allow recovery towards 1
-        self.synaptic_efficiency = self.synaptic_efficiency * (1 - self.depression_rate * self.spikes.float()) \
-                                   + self.recovery_rate * (1 - self.synaptic_efficiency)
+        self.synaptic_efficiency = (self.synaptic_efficiency * (1 - self.depression_rate * self.spikes.float()) +
+                                    self.recovery_rate * (1 - self.synaptic_efficiency)).detach()
 
         if self.use_adaptive_threshold:
-            self.V_th[self.spikes.bool()] += self.eta
-            self.V_th[~self.spikes.bool()] -= self.eta * (self.V_th[~self.spikes.bool()] - 1.0)
+            self.V_th = torch.clamp(self.V_th, self.min_threshold, self.max_threshold).detach()
         self.V_th = torch.clamp(self.V_th, self.min_threshold, self.max_threshold)
 
         return self.spikes
