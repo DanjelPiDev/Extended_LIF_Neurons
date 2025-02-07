@@ -136,7 +136,7 @@ LIFLayer class with PyTorch:
 
 ```python
 import torch
-from extended_lif_neurons.layers.torch_layers import LIFLayer
+from layers.torch_layers import LIFLayer
 
 # Initialize neuron group
 lif = LIFLayer(
