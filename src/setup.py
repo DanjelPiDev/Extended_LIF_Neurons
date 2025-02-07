@@ -1,15 +1,18 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="snn_neurons",
-    version="0.1.0",
+    name="extended_lif_neurons",
+    version="0.2.0",
     packages=find_packages(),
     install_requires=[
         "torch",
         "numpy",
         "matplotlib",
     ],
-    description="A project implementing custom LIF Neurons and layers for Spiking Neural Networks (SNNs) in PyTorch.",
+    description="This repository presents an advanced LIF neuron model with dynamic spike probability, adaptive "
+                "thresholds, synaptic plasticity, and neuromodulation for more biologically realistic behavior. Key "
+                "features include membrane potential tracking, stochastic and deterministic spike generation, "
+                "adaptive excitability, and PyTorch integration.",
     author="NullPointerExcy",
-    url="https://github.com/NullPointerExcy/snn_neurons",
+    url="https://github.com/NullPointerExcy/Extended_LIF_Neurons",
 )
