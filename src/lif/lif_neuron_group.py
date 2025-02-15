@@ -1,11 +1,12 @@
 import numpy as np
 import torch
+import torch.nn as nn
 
 from lif.sg.spike_function import SpikeFunction
 from lif.probability.dynamic_spike_probability import DynamicSpikeProbability
 
 
-class LIFNeuronGroup:
+class LIFNeuronGroup(nn.Module):
     """
     A vectorized LIF neuron model for multiple neurons.
     Because the LIFNeuron is inefficient for large neuron counts.
@@ -34,7 +35,10 @@ class LIFNeuronGroup:
                  spike_increase: float = 0.5,
                  depression_rate: float = 0.1,
                  recovery_rate: float = 0.05,
-                 neuromod_transform=None):
+                 neuromod_transform=None,
+                 learnable_threshold: bool = True,
+                 learnable_tau: bool = False,
+                 learnable_eta: bool = False):
         """
         Initialize the LIF neuron group with its parameters.
 
@@ -62,6 +66,9 @@ class LIFNeuronGroup:
         :param neuromod_transform: A function or module that takes an external modulation tensor (e.g. reward/error signal)
             and returns a transformed tensor (e.g. modulation factors in [0,1]).
             If None, a default sigmoid transformation will be applied.
+        :param learnable_threshold: Whether the threshold voltage should be learnable.
+        :param learnable_tau: Whether the membrane time constant should be learnable.
+        :param learnable_eta: Whether the adaptation rate should be learnable.
         """
         assert num_neurons > 0, "Number of neurons must be positive."
 
@@ -82,17 +89,27 @@ class LIFNeuronGroup:
         assert 0 <= depression_rate <= 1, "depression_rate must be in [0, 1]."
         assert recovery_rate >= 0, "recovery_rate must be non-negative."
 
+        super(LIFNeuronGroup, self).__init__()
         self.device = torch.device(device)
 
         self.batch_size = batch_size
         self.device = device
 
         self.num_neurons = num_neurons
-        self.V_th = torch.full((batch_size, num_neurons), V_th, device=device)
+        if learnable_threshold:
+            self.V_th = nn.Parameter(torch.full((batch_size, num_neurons), V_th, device=device))
+        else:
+            self.register_buffer('V_th', torch.full((batch_size, num_neurons), V_th, device=device))
         self.V_reset = torch.tensor(V_reset, device=device)
-        self.tau = torch.tensor(tau, device=device)
+        if learnable_tau:
+            self.tau = nn.Parameter(torch.tensor(tau, device=device))
+        else:
+            self.register_buffer('tau', torch.tensor(tau, device=device))
         self.dt = torch.tensor(dt, device=device)
-        self.eta = torch.tensor(eta, device=device)
+        if learnable_eta:
+            self.eta = nn.Parameter(torch.tensor(eta, device=device))
+        else:
+            self.register_buffer('eta', torch.tensor(eta, device=device))
         self.V = torch.zeros((batch_size, num_neurons), device=device)
         self.spikes = torch.zeros((batch_size, num_neurons), dtype=torch.bool, device=device)
         self.use_adaptive_threshold = use_adaptive_threshold
@@ -130,7 +147,10 @@ class LIFNeuronGroup:
             self.V = initial_V.to(self.device)
         else:
             self.V.fill_(0.0)
-        self.V_th.fill_(initial_V_th)
+        if isinstance(self.V_th, nn.Parameter):
+            self.V_th.data.fill_(initial_V_th)
+        else:
+            self.V_th.fill_(initial_V_th)
         self.spikes.zero_()
         self.adaptation_current.fill_(initial_adaptation)
         self.synaptic_efficiency.fill_(initial_synaptic)
@@ -191,8 +211,16 @@ class LIFNeuronGroup:
                                     self.recovery_rate * (1 - self.synaptic_efficiency)).detach()
 
         if self.use_adaptive_threshold:
-            self.V_th = torch.clamp(self.V_th, self.min_threshold, self.max_threshold).detach()
-        self.V_th = torch.clamp(self.V_th, self.min_threshold, self.max_threshold)
+            with torch.no_grad():
+                if isinstance(self.V_th, nn.Parameter):
+                    self.V_th.data.clamp_(self.min_threshold, self.max_threshold).detach()
+                else:
+                    self.V_th = torch.clamp(self.V_th, self.min_threshold, self.max_threshold).detach()
+        with torch.no_grad():
+            if isinstance(self.V_th, nn.Parameter):
+                self.V_th.data.clamp_(self.min_threshold, self.max_threshold)
+            else:
+                self.V_th = torch.clamp(self.V_th, self.min_threshold, self.max_threshold)
 
         return self.spikes
 

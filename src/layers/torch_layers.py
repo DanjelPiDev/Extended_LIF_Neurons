@@ -38,7 +38,10 @@ class LIFLayer(nn.Module):
                  spike_increase: float = 0.5,
                  depression_rate: float = 0.1,
                  recovery_rate: float = 0.05,
-                 neuromod_transform=None):
+                 neuromod_transform=None,
+                 learnable_threshold: bool = True,
+                 learnable_tau: bool = False,
+                 learnable_eta: bool = False):
         """
         :param num_neurons: Number of neurons in the group.
         :param V_th: Initial threshold voltage for all neurons.
@@ -65,6 +68,9 @@ class LIFLayer(nn.Module):
         :param neuromod_transform: A function or module that transforms an external modulation tensor
                                    (e.g., reward/error signal) into modulation factors.
                                    If None, a default sigmoid transformation will be applied.
+        :param learnable_threshold: Whether the threshold voltage should be learnable.
+        :param learnable_tau: Whether the membrane time constant should be learnable.
+        :param learnable_eta: Whether the adaptation rate should be learnable.
         """
         super(LIFLayer, self).__init__()
 
@@ -91,7 +97,10 @@ class LIFLayer(nn.Module):
             spike_increase=spike_increase,
             depression_rate=depression_rate,
             recovery_rate=recovery_rate,
-            neuromod_transform=neuromod_transform
+            neuromod_transform=neuromod_transform,
+            learnable_threshold=learnable_threshold,
+            learnable_tau=learnable_tau,
+            learnable_eta=learnable_eta
         )
         self.spike_coding = spike_coding
 
@@ -134,7 +143,9 @@ class LIFLayer(nn.Module):
 
         # Update threshold, adaptation, etc. (same as before)
         if self.lif_group.use_adaptive_threshold:
-            V_th = torch.where(spikes.bool(), V_th + self.lif_group.eta, V_th - self.lif_group.eta * (V_th - 1.0))
+            V_th = torch.where(spikes.bool(),
+                               V_th + self.lif_group.eta,
+                               V_th - self.lif_group.eta * (V_th - 1.0))
         V_th = torch.clamp(V_th, self.lif_group.min_threshold, self.lif_group.max_threshold)
 
         # Update adaptation and synaptic efficiency
@@ -208,7 +219,11 @@ class LIFLayer(nn.Module):
 
         # Update the neuron group's internal states
         self.lif_group.V = V.detach()
-        self.lif_group.V_th = V_th.detach()
+        with torch.no_grad():
+            if isinstance(self.lif_group.V_th, nn.Parameter):
+                self.lif_group.V_th.data.copy_(V_th.detach())
+            else:
+                self.lif_group.V_th = V_th.detach()
         self.lif_group.adaptation_current = adaptation_current.detach()
         self.lif_group.synaptic_efficiency = synaptic_efficiency.detach()
 
