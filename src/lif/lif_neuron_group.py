@@ -141,6 +141,26 @@ class LIFNeuronGroup(nn.Module):
 
         self.neuromod_transform = neuromod_transform
 
+    def initialize_states(self, batch_size):
+        """
+        Initialize or reset internal states for a given batch size.
+        """
+        self.batch_size = batch_size
+
+        self.V = torch.zeros((batch_size, self.num_neurons), device=self.device)
+        self.spikes = torch.zeros((batch_size, self.num_neurons), dtype=torch.bool, device=self.device)
+        self.adaptation_current = torch.zeros((batch_size, self.num_neurons), device=self.device)
+        self.synaptic_efficiency = torch.ones((batch_size, self.num_neurons), device=self.device)
+        self.neuromodulator = torch.ones((batch_size, self.num_neurons), device=self.device)
+
+    def resize_states(self, new_batch_size):
+        """
+        Resize internal states if the batch size changes.
+        """
+        if new_batch_size != self.batch_size:
+            print(f"[INFO] Resizing states: {self.batch_size} -> {new_batch_size}")
+            self.initialize_states(new_batch_size)
+
     def reset_state(self, initial_V=None, initial_V_th=1.0, initial_adaptation=0.0,
                     initial_synaptic=1.0, initial_neuromod=1.0):
         if initial_V is not None:

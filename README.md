@@ -63,9 +63,9 @@ workflows.
 | ``depression_rate``	                 | 0.1	         | Rate at which synaptic efficiency is reduced (depressed) when a neuron spikes.                                                                                                                        |
 | ``recovery_rate``	                   | 0.05	        | Rate at which synaptic efficiency recovers toward its baseline (typically 1) after being depressed.                                                                                                   |
 | ``neuromod_transform``	              | None	        | A function or module that transforms an external modulation tensor (e.g. reward or error signal) into modulation factors (typically in [0, 1]). If None, a default sigmoid transformation is applied. |
-| ``learnable_threshold``	             | False	       | If true, the threshold voltage is learnable and can be updated during training.                                                                                                                       |
-| ``learnable_tau``	                    | False	       | If true, the membrane time constant tau is learnable and can be updated during training.                                                                                                              |
-| ``learnable_eta``	                    | False	       | If true, the adaptation rate eta is learnable and can be updated during training.                                                                                                                     |
+| ``learnable_threshold``	             | `True`	      | If true, the threshold voltage is learnable and can be updated during training.                                                                                                                       |
+| ``learnable_tau``	                    | `False`	       | If true, the membrane time constant tau is learnable and can be updated during training.                                                                                                              |
+| ``learnable_eta``	                    | `False`	       | If true, the adaptation rate eta is learnable and can be updated during training.                                                                                                                     |
 
 ### How It Works
 

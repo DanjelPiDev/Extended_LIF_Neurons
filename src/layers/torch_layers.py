@@ -170,6 +170,9 @@ class LIFLayer(nn.Module):
         """
         timesteps, batch_size, num_neurons = input_data.shape
 
+        # Adjust internal states dynamically
+        self.resize_internal_states(batch_size)
+
         # Preallocate spike tensor for all timesteps
         output_spikes = torch.zeros(
             timesteps, batch_size, num_neurons,
@@ -228,3 +231,27 @@ class LIFLayer(nn.Module):
         self.lif_group.synaptic_efficiency = synaptic_efficiency.detach()
 
         return output_spikes, voltages
+
+    def resize_internal_states(self, batch_size):
+        if batch_size != self.lif_group.batch_size:
+            self.lif_group.batch_size = batch_size
+            self.lif_group.V = torch.zeros((batch_size, self.lif_group.num_neurons), device=self.lif_group.device)
+            if isinstance(self.lif_group.V_th, nn.Parameter):
+                self.lif_group.V_th.data = torch.ones((batch_size, self.lif_group.num_neurons), device=self.lif_group.device) * self.lif_group.V_th.data
+            else:
+                self.lif_group.V_th = torch.ones((batch_size, self.lif_group.num_neurons), device=self.lif_group.device) * self.lif_group.V_th
+            self.lif_group.adaptation_current = torch.zeros((batch_size, self.lif_group.num_neurons), device=self.lif_group.device)
+            self.lif_group.synaptic_efficiency = torch.ones((batch_size, self.lif_group.num_neurons), device=self.lif_group.device)
+            self.lif_group.neuromodulator = torch.ones((batch_size, self.lif_group.num_neurons), device=self.lif_group.device)
+
+
+    def reset_internal_states(self):
+        self.lif_group.V = torch.zeros(self.lif_group.num_neurons, device=self.lif_group.device)
+        if isinstance(self.lif_group.V_th, nn.Parameter):
+            self.lif_group.V_th.data = torch.ones(self.lif_group.num_neurons, device=self.lif_group.device) * self.lif_group.V_th.data
+        else:
+            self.lif_group.V_th = torch.ones(self.lif_group.num_neurons, device=self.lif_group.device) * self.lif_group.V_th
+        self.lif_group.adaptation_current = torch.zeros(self.lif_group.num_neurons, device=self.lif_group.device)
+        self.lif_group.synaptic_efficiency = torch.ones(self.lif_group.num_neurons, device=self.lif_group.device)
+
+
