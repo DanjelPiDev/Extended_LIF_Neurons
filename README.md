@@ -1,8 +1,8 @@
 # Extended LIF Neurons
 
-### 🚀 Development Notes
+### Development Notes
 
-> ⚡ I developed my own implementation of LIF neurons because
+> I developed my own implementation of LIF neurons because
 > existing libraries did not meet my specific requirements.
 > I also implemented PyTorch-compatible layers for LIF neurons,
 > enabling their integration into neural network models.
