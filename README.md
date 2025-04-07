@@ -7,6 +7,12 @@
 > I also implemented PyTorch-compatible layers for LIF neurons,
 > enabling their integration into neural network models.
 
+> Now with an streamlit dashboard for easy visualization and interaction!
+```bash
+streamlit run lif_streamlit_dashboard.py
+```
+
+
 ---
 
 ## Overview

@@ -24,3 +24,13 @@ class DynamicSpikeProbability(nn.Module):
         self.adaptation = self.adaptation * exp_factor + prev_spikes.float()
         effective_alpha = self.base_alpha / (1.0 + self.adaptation)
         return torch.sigmoid(effective_alpha * x), self.adaptation
+
+    def resize(self, batch_size, num_neurons):
+        self.adaptation = torch.zeros(batch_size, num_neurons, device=self.adaptation.device)
+
+    def reset(self, batch_size=None):
+        if batch_size is not None and batch_size != self.adaptation.shape[0]:
+            self.adaptation = torch.zeros(batch_size, self.adaptation.shape[1], device=self.adaptation.device)
+        else:
+            self.adaptation.zero_()
+
