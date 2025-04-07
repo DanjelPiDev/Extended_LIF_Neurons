@@ -9,7 +9,7 @@
 
 > Now with an streamlit dashboard for easy visualization and interaction!
 ```bash
-streamlit run lif_streamlit_dashboard.py
+streamlit run src/lif_streamlit_dashboard.py
 ```
 
 
