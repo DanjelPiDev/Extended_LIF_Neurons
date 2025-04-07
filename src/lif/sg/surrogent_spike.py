@@ -1,6 +1,6 @@
 from torch import nn
 
-from src.lif.sg.spike_function import SpikeFunction
+from lif.sg.spike_function import SpikeFunction
 
 
 class SurrogateSpike(nn.Module):

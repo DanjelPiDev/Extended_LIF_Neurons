@@ -2,8 +2,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from src.lif.sg.spike_function import SpikeFunction
-from src.lif.probability.dynamic_spike_probability import DynamicSpikeProbability
+from lif.sg.spike_function import SpikeFunction
+from lif.probability.dynamic_spike_probability import DynamicSpikeProbability
 
 
 def get_surrogate_fn(name, alpha):

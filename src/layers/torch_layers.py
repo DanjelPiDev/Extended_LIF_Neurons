@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torch import Tensor
-from src.lif.lif_neuron_group import LIFNeuronGroup
+from lif.lif_neuron_group import LIFNeuronGroup
 
 
 class LIFLayer(nn.Module):
