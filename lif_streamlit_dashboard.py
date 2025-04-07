@@ -2,7 +2,7 @@ import streamlit as st
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
-from src.layers.torch_layers import LIFLayer
+from layers.torch_layers import LIFLayer
 
 
 def generate_input(timesteps, batch_size, num_neurons, noise_level):
