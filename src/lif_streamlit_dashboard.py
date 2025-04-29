@@ -1,5 +1,6 @@
 import streamlit as st
 import torch
+print(torch.__version__)
 import numpy as np
 import matplotlib.pyplot as plt
 from layers.torch_layers import LIFLayer
