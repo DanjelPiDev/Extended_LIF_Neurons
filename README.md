@@ -203,7 +203,7 @@ This implementation captures three key biological phenomena:
 
 ### Performance Analysis
 
-> Tested on NVIDIA RTX 4080 Super (16GB VRAM) with PyTorch 2.5.1+cu118
+> Tested on NVIDIA RTX 4080 Super (16GB VRAM) with PyTorch 2.7.0+cu118
 
 #### Memory Scaling
 
