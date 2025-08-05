@@ -33,7 +33,8 @@ def run_simulation(config, input_current, ext_mod):
 
 def plot_results(spikes, voltages, input_current, title, use_legend):
     fig, ax = plt.subplots(figsize=(10, 4))
-    ax.set_title(title)
+    n_title = title if not use_quantum else f"Quantum Mode: {title}"
+    ax.set_title(n_title)
     ax.plot(voltages, label="Membrane Potential", color='tab:blue')
     ax.plot(input_current, label="Input Current", linestyle='--', alpha=0.5, color='tab:orange')
     spike_times = np.where(spikes)[0]
@@ -53,6 +54,11 @@ st.markdown("Visualize different LIF neuron modes with simulated input.")
 left, right = st.columns([1, 2], gap="large")
 
 with left:
+    spike_mode = st.selectbox(
+        "Spike Decision Mode",
+        ["Classic (Threshold/Probability)", "Quantum (Qubit Measurement)"]
+    )
+    use_quantum = spike_mode == "Quantum (Qubit Measurement)"
     mode = st.selectbox("Select Neuron Mode", [
         "Deterministic (Basic LIF)",
         "Stochastic (Constant Threshold)",
@@ -60,6 +66,15 @@ with left:
         "Dynamic Spike Probability",
         "With Neuromodulation"
     ])
+
+    if use_quantum:
+        quantum_wire = st.slider("Number of Quantum Wires (Qubits)", 1, 10, 4)
+        quantum_threshold = st.slider("Quantum Threshold (cos(theta))", 0.0, 1.0, 0.7)
+        quantum_leak = st.slider("Quantum Leak (RY rotation)", 0.0, 2.0, 0.1)
+    else:
+        quantum_wire = 4
+        quantum_threshold = 0.7
+        quantum_leak = 0.1
 
     available_neuromod_functions = [
         "lambda x: torch.sigmoid(2*x)",
@@ -95,7 +110,11 @@ configs = {
             "use_adaptive_threshold": False,
             "V_th": V_th,
             "tau": tau,
-            "device": device
+            "device": device,
+            "quantum_mode": use_quantum,
+            "quantum_wire": quantum_wire,
+            "quantum_threshold": quantum_threshold,
+            "quantum_leak": quantum_leak,
         }
     },
     "Stochastic (Constant Threshold)": {
@@ -106,7 +125,11 @@ configs = {
             "V_th": V_th,
             "tau":tau,
             "use_adaptive_threshold": False,
-            "device": device
+            "device": device,
+            "quantum_mode": use_quantum,
+            "quantum_wire": quantum_wire,
+            "quantum_threshold": quantum_threshold,
+            "quantum_leak": quantum_leak,
         }
     },
     "Adaptive Threshold": {
@@ -119,7 +142,11 @@ configs = {
             "eta": eta,
             "min_threshold": 0.8,
             "max_threshold": 2.0,
-            "device": device
+            "device": device,
+            "quantum_mode": use_quantum,
+            "quantum_wire": quantum_wire,
+            "quantum_threshold": quantum_threshold,
+            "quantum_leak": quantum_leak,
         }
     },
     "Dynamic Spike Probability": {
@@ -131,7 +158,11 @@ configs = {
             "tau": tau,
             "base_alpha": 5.0,
             "tau_adapt": 10.0,
-            "device": device
+            "device": device,
+            "quantum_mode": use_quantum,
+            "quantum_wire": quantum_wire,
+            "quantum_threshold": quantum_threshold,
+            "quantum_leak": quantum_leak,
         }
     },
     "With Neuromodulation": {
@@ -141,7 +172,11 @@ configs = {
             "V_th": V_th,
             "tau": tau,
             "neuromod_transform": neuromodulation_function,
-            "device": device
+            "device": device,
+            "quantum_mode": use_quantum,
+            "quantum_wire": quantum_wire,
+            "quantum_threshold": quantum_threshold,
+            "quantum_leak": quantum_leak,
         }
     }
 }

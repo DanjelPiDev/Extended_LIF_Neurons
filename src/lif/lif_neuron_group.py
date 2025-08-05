@@ -1,4 +1,6 @@
-import numpy as np
+import math
+
+import pennylane as qml
 import torch
 import torch.nn as nn
 
@@ -51,7 +53,12 @@ class LIFNeuronGroup(nn.Module):
                  neuromod_transform=None,
                  learnable_threshold: bool = True,
                  learnable_tau: bool = False,
-                 learnable_eta: bool = False):
+                 learnable_eta: bool = False,
+                 quantum_mode: bool = False,
+                 quantum_threshold: float = 0.7,
+                 quantum_leak: float = 0.1,
+                 quantum_wire: int = 4,
+                 ):
         """
         Initialize the LIF neuron group with its parameters.
 
@@ -82,6 +89,7 @@ class LIFNeuronGroup(nn.Module):
         :param learnable_threshold: Whether the threshold voltage should be learnable.
         :param learnable_tau: Whether the membrane time constant should be learnable.
         :param learnable_eta: Whether the adaptation rate should be learnable.
+        :param quantum_mode: If True, the neuron group operates in quantum mode, which may affect how spikes are processed.
         """
         assert num_neurons > 0, "Number of neurons must be positive."
 
@@ -101,6 +109,9 @@ class LIFNeuronGroup(nn.Module):
         assert spike_increase >= 0, "spike_increase must be non-negative."
         assert 0 <= depression_rate <= 1, "depression_rate must be in [0, 1]."
         assert recovery_rate >= 0, "recovery_rate must be non-negative."
+        assert quantum_threshold > 0, "quantum_threshold must be positive."
+        assert quantum_leak >= 0, "quantum_leak must be non-negative."
+        assert quantum_wire > 0, "quantum_wire must be a positive integer."
 
         super(LIFNeuronGroup, self).__init__()
         self.device = torch.device(device)
@@ -133,6 +144,14 @@ class LIFNeuronGroup(nn.Module):
 
         self.neuromod_transform = neuromod_transform
         self.surrogate_fn = get_surrogate_fn(surrogate_gradient_function, alpha)
+
+        self.learnable_threshold = learnable_threshold
+        self.learnable_tau = learnable_tau
+        self.learnable_eta = learnable_eta
+        self.quantum_mode = quantum_mode
+        self.quantum_threshold = quantum_threshold
+        self.quantum_leak = quantum_leak
+        self.quantum_wire = quantum_wire
 
         self.register_buffer("V", torch.zeros(shape))
         self.register_buffer("spikes", torch.zeros(shape, dtype=torch.bool))
@@ -200,14 +219,18 @@ class LIFNeuronGroup(nn.Module):
         dV = (I_eff - self.V) / self.tau
         self.V = self.V + dV * self.dt + noise
 
-        if self.stochastic:
-            delta = self.V - self.V_th
-            spike_prob, _ = self.dynamic_spike_probability(delta, self.spikes) \
-                if self.allow_dynamic_spike_probability else torch.sigmoid(delta)
-            self.spikes = torch.rand_like(self.V) < spike_prob
+        if self.quantum_mode:
+            # Quantum Spike Decision?
+            self.spikes = self.get_quantum_spikes(self.V, self.V_th, self.quantum_leak, self.quantum_threshold)
         else:
-            spike_out = self.surrogate_fn(self.V - self.V_th)
-            self.spikes = spike_out.bool()
+            if self.stochastic:
+                delta = self.V - self.V_th
+                spike_prob, _ = self.dynamic_spike_probability(delta, self.spikes) \
+                    if self.allow_dynamic_spike_probability else torch.sigmoid(delta)
+                self.spikes = torch.rand_like(self.V) < spike_prob
+            else:
+                spike_out = self.surrogate_fn(self.V - self.V_th)
+                self.spikes = spike_out.bool()
 
         self.V = torch.where(self.spikes, torch.tensor(self.V_reset, device=self.device), self.V)
 
@@ -224,3 +247,31 @@ class LIFNeuronGroup(nn.Module):
                 self.V_th = torch.clamp(self.V_th, self.min_threshold, self.max_threshold)
 
         return self.spikes
+
+    def get_quantum_spikes(self, V, V_th, leak, threshold, dev=None):
+        """
+        Proof-of-concept for quantum LIF neuron group.
+
+        V, V_th, leak, threshold = torch.tensor, shape (batch, num_neurons)
+        Returns: spikes (torch.BoolTensor), shape (batch, num_neurons)
+        """
+        batch_size, num_neurons = V.shape
+        spikes = torch.zeros_like(V, dtype=torch.bool)
+
+        if dev is None:
+            dev = qml.device("default.qubit", wires=self.quantum_wire)
+
+        for b in range(batch_size):
+            for n in range(num_neurons):
+                mem = V[b, n].item()
+                vth = V_th[b, n].item() if isinstance(V_th, torch.Tensor) else V_th
+
+                @qml.qnode(dev, interface='torch')
+                def qc():
+                    qml.RY(mem, wires=0)
+                    qml.RY(-leak, wires=0)
+                    return qml.expval(qml.PauliZ(0))
+                z = qc()
+                fire = float(z) < math.cos(threshold)
+                spikes[b, n] = fire
+        return spikes
