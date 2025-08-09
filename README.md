@@ -160,7 +160,7 @@ The probability of measuring `|1>` is:
 p(|1>) = sin²(θ / 2) = 0.5 * (1 - cos θ)
 ```
 
-We map the neuron's **membrane gap**:
+Then map the neuron's **membrane gap**:
 
 ```
 Δ = V - V_th
