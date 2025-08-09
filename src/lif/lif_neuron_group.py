@@ -359,7 +359,7 @@ class LIFNeuronGroup(nn.Module):
             else:
                 y = self.surrogate_fn(delta)  # float, 0/1 forward with Surrogate-Gradient
                 self.spike_values = y
-                # Bool for the reset; delta>=0 is cleaner than y>0
+                # Bool for the reset
                 self.spikes = (delta >= 0)
 
         self.V.masked_fill_(self.spikes, self.V_reset)
