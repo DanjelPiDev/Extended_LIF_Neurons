@@ -143,59 +143,85 @@ I_{effective} = I * synaptic_{efficiency} + neuromodulator - adaptation_{current
 
 ## Quantum Mode, Theory, Mapping & Calibration
 
-This project includes a *qubit-based* spike generator for LIF neurons. The goal is to get a **differentiable, calibrated, and vectorized** probabilistic spike mechanism that can be trained end‑to‑end, while still being grounded in a simple quantum circuit.
+This project includes a *qubit-based* spike generator for LIF neurons.  
+The goal is to get a **differentiable, calibrated, and vectorized** probabilistic spike mechanism that can be trained end-to-end, while still being grounded in a simple quantum circuit.
 
-### 1) One‑Qubit Circuit (what we actually compute)
+### 1) One-Qubit Circuit (what we actually compute)
 
 I use a single qubit with a rotation about the Y axis and measure `Z`:
 
-\[
-\text{prepare }|0\rangle \xrightarrow{\ \mathrm{RY}(\theta)\ }\ \text{measure } Z.
-\]
+```
+prepare |0> --RY(θ)--> measure Z
+```
 
-The probability of measuring \(|1\rangle\) is
+The probability of measuring `|1>` is:
 
-\[
-p(|1\rangle)=\sin^2\!\frac{\theta}{2}=\tfrac12\,(1-\cos\theta).
-\]
+```
+p(|1>) = sin²(θ / 2) = 0.5 * (1 - cos θ)
+```
 
-We map the neuron's **membrane gap** \(\Delta = V - V_{\text{th}}\) to the rotation angle \(\theta\) through a **monotonic squashing**:
+We map the neuron's **membrane gap**:
 
-\[
-\boxed{\ \theta \;=\; \pi \cdot \sigma\big(q_{\text{scale}}\cdot \Delta + q_{\text{bias}} - \texttt{quantum\_leak}\big)\ } \quad\Rightarrow\quad
-\boxed{\ p \;=\; \tfrac12\,\big(1-\cos\theta\big)\ }.
-\]
+```
+Δ = V - V_th
+```
 
-Using a sigmoid \(\sigma(\cdot)\) forces \(\theta\in[0,\pi]\), making \(p(\Delta)\) **monotonic increasing** (no periodic hotspots).
+to the rotation angle θ through a **monotonic squashing**:
 
-> **Neuromodulation (optional):** with `neuromod_mode="prob_slope"` we scale the pre‑activation
-> \(\text{pre}=q_{\text{scale}}\Delta+q_{\text{bias}}-\texttt{leak}\) by \((1 + s \cdot m)\),
-> where \(m\) is the neuromodulator and \(s\) the `neuromod_strength`.
+```
+θ = π * sigmoid(q_scale * Δ + q_bias - quantum_leak)
+p  = 0.5 * (1 - cos θ)
+```
+
+Using a sigmoid forces θ ∈ [0, π], making p(Δ) **monotonic increasing** (no periodic hotspots).
+
+> **Neuromodulation (optional):**  
+> With `neuromod_mode="prob_slope"`, we scale the pre-activation  
+> `pre = q_scale * Δ + q_bias - leak` by `(1 + s * m)`,  
+> where `m` is the neuromodulator and `s` the `neuromod_strength`.
+
+---
 
 ### 2) Why monotonic mapping?
-If you use \(\theta = q_{\text{scale}}\Delta + q_{\text{bias}} - \texttt{leak}\) *without* the sigmoid, \(p=\tfrac12(1-\cos\theta)\) becomes **periodic** in \(\Delta\). That often yields *high* spike probabilities even for **negative** \(\Delta\), driving the adaptation current up, and pushing membrane voltages negative. The sigmoid mapping fixes that.
 
-### 3) Calibration (no need to crank up \(V_{\text{th}}\))
+If you use:
 
-Instead of raising \(V_{\text{th}}\), calibrate the two quantum parameters:
+```
+θ = q_scale * Δ + q_bias - leak
+```
 
-- **Baseline firing** at \(\Delta=0\): choose a small \(p_0\in[0.01, 0.05]\).
-  \[
-  s \;=\; \frac{1}{\pi}\arccos(1 - 2p_0),\quad
-  q_{\text{bias}} \;=\; \mathrm{logit}(s)=\ln\!\frac{s}{1-s}.
-  \]
-- **Steepness** around \(\Delta=0\): choose a target slope \(\left.\frac{dp}{d\Delta}\right|_{\Delta=0}\) (e.g. \(0.1\)–\(0.2\)).
-  \[
-  \frac{dp}{d\mathrm{pre}}\Big|_{\Delta=0}
-  \;=\; \tfrac{\pi}{2}\,\sin(\pi s)\,s(1-s),\qquad
-  q_{\text{scale}} \;=\;
-  \frac{\text{target\_slope}}{\max\!\big(\tfrac{\pi}{2}\sin(\pi s)\,s(1-s),\,10^{-6}\big)}.
-  \]
+without the sigmoid, `p = 0.5 * (1 - cos θ)` becomes **periodic** in Δ.  
+That often yields high spike probabilities even for **negative** Δ, driving the adaptation current up and pushing membrane voltages negative.  
+The sigmoid mapping fixes that.
 
-Recommended starting values:
-- \(p_0 \approx 0.02 \Rightarrow q_{\text{bias}} \approx -2.3\)
-- \(q_{\text{scale}} \approx 2\)–\(4\)
-- `quantum_leak = 0.0` initially
+---
+
+### 3) Calibration (no need to crank up V_th)
+
+Instead of raising V_th, calibrate the two quantum parameters:
+
+- **Baseline firing** at Δ = 0: choose a small p₀ ∈ [0.01, 0.05].
+
+```
+s        = (1 / π) * arccos(1 - 2 * p₀)
+q_bias   = logit(s) = ln(s / (1 - s))
+```
+
+- **Steepness** around Δ = 0: choose a target slope dp/dΔ|₀ (e.g. 0.1–0.2).
+
+```
+dp/dpre @Δ=0 = (π / 2) * sin(π * s) * s * (1 - s)
+q_scale      = target_slope / max(dp/dpre, 1e-6)
+```
+
+**Recommended starting values:**
+
+```
+p₀ ≈ 0.02  =>  q_bias ≈ -2.3
+q_scale ≈ 2 – 4
+quantum_leak = 0.0  (initially)
+```
+
 
 
 #### Results
