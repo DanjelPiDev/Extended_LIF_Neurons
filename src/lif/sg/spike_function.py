@@ -22,8 +22,8 @@ class SpikeFunction(torch.autograd.Function):
         return grad_input, None, None
 
     @staticmethod
-    def heaviside(x):
-        return 0.5 * (torch.sign(x) + 1)
+    def heaviside(x, alpha: float = 1.0):
+        return torch.clamp(1.0 - alpha * x.abs(), min=0.0)
 
     @staticmethod
     def fast_sigmoid(x, alpha: float = 1.0):

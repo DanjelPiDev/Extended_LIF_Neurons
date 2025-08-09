@@ -114,13 +114,22 @@ class LIFNeuronGroup(nn.Module):
         assert quantum_wire > 0, "quantum_wire must be a positive integer."
 
         super(LIFNeuronGroup, self).__init__()
-        self.device = torch.device(device)
         self.num_neurons = num_neurons
 
         shape = (1, num_neurons)
-        self.V_th = nn.Parameter(torch.full(shape, V_th)) if learnable_threshold else torch.full(shape, V_th)
-        self.tau = nn.Parameter(torch.tensor(tau)) if learnable_tau else torch.tensor(tau)
-        self.eta = nn.Parameter(torch.tensor(eta)) if learnable_eta else torch.tensor(eta)
+        self.V_th = (nn.Parameter(torch.full((num_neurons,), V_th))
+                     if learnable_threshold else torch.full((num_neurons,), V_th))
+
+
+        if learnable_tau:
+            self.tau = nn.Parameter(torch.tensor(float(tau)))
+        else:
+            self.register_buffer("tau", torch.tensor(float(tau)))
+
+        if learnable_eta:
+            self.eta = nn.Parameter(torch.tensor(float(eta)))
+        else:
+            self.register_buffer("eta", torch.tensor(float(eta)))
 
         self.V_reset = V_reset
         self.dt = dt
@@ -153,25 +162,25 @@ class LIFNeuronGroup(nn.Module):
         self.quantum_leak = quantum_leak
         self.quantum_wire = quantum_wire
 
-        self.register_buffer("V", torch.zeros(shape))
-        self.register_buffer("spikes", torch.zeros(shape, dtype=torch.bool))
-        self.register_buffer("adaptation_current", torch.zeros(shape))
-        self.register_buffer("synaptic_efficiency", torch.ones(shape))
-        self.register_buffer("neuromodulator", torch.ones(shape))
+        self.register_buffer("V", torch.zeros(1, num_neurons))
+        self.register_buffer("spikes", torch.zeros(1, num_neurons, dtype=torch.bool))
+        self.register_buffer("adaptation_current", torch.zeros(1, num_neurons))
+        self.register_buffer("synaptic_efficiency", torch.ones(1, num_neurons))
+        self.register_buffer("neuromodulator", torch.ones(1, num_neurons))
+        self.register_buffer("spike_values", torch.zeros(1, num_neurons))
 
-    def resize(self, batch_size):
+    def resize(self, batch_size: int, device: torch.device | None = None):
+        dev = device if device is not None else self.V.device
         shape = (batch_size, self.num_neurons)
-        self.V = torch.zeros(shape, device=self.device)
-        self.spikes = torch.zeros(shape, dtype=torch.bool, device=self.device)
-        self.adaptation_current = torch.zeros(shape, device=self.device)
-        self.synaptic_efficiency = torch.ones(shape, device=self.device)
-        self.neuromodulator = torch.ones(shape, device=self.device)
-        if isinstance(self.V_th, nn.Parameter):
-            self.V_th = nn.Parameter(torch.full(shape, self.V_th.data.mean(), device=self.device))
-        else:
-            self.V_th = torch.full(shape, self.V_th.mean(), device=self.device)
+        self.V = torch.zeros(shape, device=dev)
+        self.spikes = torch.zeros(shape, dtype=torch.bool, device=dev)
+        self.adaptation_current = torch.zeros(shape, device=dev)
+        self.synaptic_efficiency = torch.ones(shape, device=dev)
+        self.neuromodulator = torch.ones(shape, device=dev)
+        self.spike_values = torch.zeros(shape, device=dev)
         if self.dynamic_spike_probability:
             self.dynamic_spike_probability.reset(batch_size)
+
 
     def initialize_states(self, batch_size):
         """
@@ -204,47 +213,71 @@ class LIFNeuronGroup(nn.Module):
                                     For example, this could encode a reward signal for dopamine modulation.
         :return: Spike tensor (binary) of shape (batch_size, num_neurons).
         """
-        if I.shape != self.V.shape:
-            self.resize(I.shape[0])
+        if I.shape != self.V.shape or I.device != self.V.device:
+            self.resize(I.shape[0], device=I.device)
 
         if external_modulation is not None:
-            self.neuromodulator = (
-                self.neuromod_transform(external_modulation)
-                if self.neuromod_transform else torch.sigmoid(external_modulation)
-            )
+            mod = (self.neuromod_transform(external_modulation)
+                   if self.neuromod_transform else torch.sigmoid(external_modulation))
+            self.neuromodulator = mod.to(I.device)
 
-        noise = torch.randn_like(I) * self.noise_std if self.stochastic else 0.0
+        V_th_eff = self.V_th.to(I.device).view(1, -1).expand(I.shape[0], -1)
+
+        if self.stochastic:
+            noise = torch.randn_like(I).mul_(self.noise_std)
+        else:
+            noise = None
+
+        if V_th_eff.device != I.device:
+            V_th_eff = V_th_eff.to(I.device)
+        V_th_eff = V_th_eff.expand(I.shape[0], -1)
 
         I_eff = I * self.synaptic_efficiency + self.neuromodulator - self.adaptation_current
-        dV = (I_eff - self.V) / self.tau
-        self.V = self.V + dV * self.dt + noise
+        dV = (I_eff - self.V) / (self.tau if isinstance(self.tau, torch.Tensor) else torch.tensor(self.tau, device=I.device))
+        self.V = self.V + dV * self.dt + (noise if noise is not None else 0.0)
 
         if self.quantum_mode:
-            # Quantum Spike Decision?
-            self.spikes = self.get_quantum_spikes(self.V, self.V_th, self.quantum_leak, self.quantum_threshold)
+            self.spikes = self.get_quantum_spikes(self.V, V_th_eff, self.quantum_leak, self.quantum_threshold)
+            self.spike_values = self.spikes.float()
         else:
+            delta = self.V - V_th_eff
+
             if self.stochastic:
-                delta = self.V - self.V_th
-                spike_prob, _ = self.dynamic_spike_probability(delta, self.spikes) \
-                    if self.allow_dynamic_spike_probability else torch.sigmoid(delta)
-                self.spikes = torch.rand_like(self.V) < spike_prob
+                if self.allow_dynamic_spike_probability:
+                    p, _ = self.dynamic_spike_probability(delta, self.spikes)
+                else:
+                    p = torch.sigmoid(delta)
+
+                if self.training:
+                    u = torch.rand_like(p)
+                    y_hard = (u < p).float()
+                    y = p + (y_hard - p).detach()
+                    self.spike_values = y
+                    self.spikes = y_hard.bool()     # bool for Reset/Logging
+                else:
+                    self.spikes = (torch.rand_like(p) < p)
+                    self.spike_values = self.spikes.float()
             else:
-                spike_out = self.surrogate_fn(self.V - self.V_th)
-                self.spikes = spike_out.bool()
+                y = self.surrogate_fn(delta)        # float, 0/1 forward with Surrogate-Gradient
+                self.spike_values = y
+                # Bool for the reset; delta>=0 is cleaner than y>0
+                self.spikes = (delta >= 0)
 
-        self.V = torch.where(self.spikes, torch.tensor(self.V_reset, device=self.device), self.V)
+        self.V.masked_fill_(self.spikes, self.V_reset)
 
-        self.adaptation_current = self.adaptation_current * self.adaptation_decay + self.spike_increase * self.spikes.float()
+        s_float = self.spike_values
+        self.adaptation_current = self.adaptation_current * self.adaptation_decay + self.spike_increase * s_float
         self.synaptic_efficiency = (
-                self.synaptic_efficiency * (1 - self.depression_rate * self.spikes.float()) +
+                self.synaptic_efficiency * (1 - self.depression_rate * s_float) +
                 self.recovery_rate * (1 - self.synaptic_efficiency)
         )
 
         if self.use_adaptive_threshold:
             if isinstance(self.V_th, nn.Parameter):
-                self.V_th.data = torch.clamp(self.V_th.data, self.min_threshold, self.max_threshold)
+                with torch.no_grad():
+                    self.V_th.clamp_(self.min_threshold, self.max_threshold)
             else:
-                self.V_th = torch.clamp(self.V_th, self.min_threshold, self.max_threshold)
+                self.V_th.clamp_(self.min_threshold, self.max_threshold)
 
         return self.spikes
 
