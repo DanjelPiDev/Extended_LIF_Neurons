@@ -51,6 +51,8 @@ class LIFNeuronGroup(nn.Module):
                  depression_rate: float = 0.1,
                  recovery_rate: float = 0.05,
                  neuromod_transform=None,
+                 neuromod_mode: str = "gain",
+                 neuromod_strength: float = 1.0,
                  learnable_threshold: bool = True,
                  learnable_tau: bool = False,
                  learnable_eta: bool = False,
@@ -86,10 +88,20 @@ class LIFNeuronGroup(nn.Module):
         :param neuromod_transform: A function or module that takes an external modulation tensor (e.g. reward/error signal)
             and returns a transformed tensor (e.g. modulation factors in [0,1]).
             If None, a default sigmoid transformation will be applied.
+        :param neuromod_mode: Mode of neuromodulation, can be "gain", "threshold", "prob_slope", or "off".
+            - "gain": Modulates the input current by a gain factor.
+            - "threshold": Modulates the threshold voltage.
+            - "prob_slope": Modulates the spike probability slope.
+            - "off": No neuromodulation.
+        :param neuromod_strength: Strength of the neuromodulation, a scalar value
+            that scales the modulation effect.
         :param learnable_threshold: Whether the threshold voltage should be learnable.
         :param learnable_tau: Whether the membrane time constant should be learnable.
         :param learnable_eta: Whether the adaptation rate should be learnable.
         :param quantum_mode: If True, the neuron group operates in quantum mode, which may affect how spikes are processed.
+        :param quantum_threshold: Threshold for quantum spike firing.
+        :param quantum_leak: Leakage factor for quantum spikes.
+        :param quantum_wire: Number of quantum wires used in the quantum mode.
         """
         assert num_neurons > 0, "Number of neurons must be positive."
 
@@ -120,7 +132,6 @@ class LIFNeuronGroup(nn.Module):
         self.V_th = (nn.Parameter(torch.full((num_neurons,), V_th))
                      if learnable_threshold else torch.full((num_neurons,), V_th))
 
-
         if learnable_tau:
             self.tau = nn.Parameter(torch.tensor(float(tau)))
         else:
@@ -147,11 +158,11 @@ class LIFNeuronGroup(nn.Module):
         self.dynamic_spike_probability = DynamicSpikeProbability(
             base_alpha=base_alpha,
             tau_adapt=tau_adapt,
-            batch_size=1,
-            num_neurons=num_neurons
         ) if allow_dynamic_spike_probability else None
 
         self.neuromod_transform = neuromod_transform
+        self.neuromod_mode = neuromod_mode
+        self.neuromod_strength = float(neuromod_strength)
         self.surrogate_fn = get_surrogate_fn(surrogate_gradient_function, alpha)
 
         self.learnable_threshold = learnable_threshold
@@ -161,6 +172,10 @@ class LIFNeuronGroup(nn.Module):
         self.quantum_threshold = quantum_threshold
         self.quantum_leak = quantum_leak
         self.quantum_wire = quantum_wire
+
+        self.q_scale = nn.Parameter(torch.tensor(1.0))  # scales delta to quantum scale
+        self.q_bias = nn.Parameter(torch.tensor(0.0))  # Angel offset
+        self.register_buffer("_qnode_ready", torch.tensor(0, dtype=torch.int8))
 
         self.register_buffer("V", torch.zeros(1, num_neurons))
         self.register_buffer("spikes", torch.zeros(1, num_neurons, dtype=torch.bool))
@@ -179,29 +194,71 @@ class LIFNeuronGroup(nn.Module):
         self.neuromodulator = torch.ones(shape, device=dev)
         self.spike_values = torch.zeros(shape, device=dev)
         if self.dynamic_spike_probability:
-            self.dynamic_spike_probability.reset(batch_size)
-
-
-    def initialize_states(self, batch_size):
-        """
-        Initialize or reset internal states for a given batch size.
-        """
-        self.batch_size = batch_size
-
-        self.V = torch.zeros((batch_size, self.num_neurons), device=self.device)
-        self.spikes = torch.zeros((batch_size, self.num_neurons), dtype=torch.bool, device=self.device)
-        self.adaptation_current = torch.zeros((batch_size, self.num_neurons), device=self.device)
-        self.synaptic_efficiency = torch.ones((batch_size, self.num_neurons), device=self.device)
-        self.neuromodulator = torch.ones((batch_size, self.num_neurons), device=self.device)
+            self.dynamic_spike_probability.resize(batch_size, self.num_neurons, dev)
 
     def reset(self):
         self.V.zero_()
         self.spikes.zero_()
+        self.spike_values.zero_()
         self.adaptation_current.zero_()
         self.synaptic_efficiency.fill_(1.0)
         self.neuromodulator.fill_(1.0)
         if self.dynamic_spike_probability:
-            self.dynamic_spike_probability.reset(self.V.shape[0])
+            self.dynamic_spike_probability.reset(self.V.shape[0],
+                                                 self.num_neurons,
+                                                 self.V.device)
+
+    @staticmethod
+    def _expand_like(x, ref):
+        # x = (B,N)
+        if x is None:
+            return None
+        if x.ndim == 0:  # scalar
+            return x.view(1, 1).expand_as(ref)
+        if x.ndim == 1:  # (N,)
+            return x.view(1, -1).expand_as(ref)
+        if x.shape != ref.shape:
+            return x.expand_as(ref)
+        return x
+
+    def _build_qnode_if_needed(self):
+        if bool(self._qnode_ready.item()):
+            return
+        dev = qml.device("default.qubit", wires=1)
+
+        @qml.qnode(dev, interface='torch', diff_method="parameter-shift")
+        def qnode(theta):
+            # shape: M,
+            qml.RY(theta, wires=0)
+            return qml.expval(qml.PauliZ(0))
+
+        self._qnode = qnode
+        self._qnode_ready.fill_(1)
+
+    def init_quantum(lif, p0=0.02, target_slope=0.15):
+        import math, torch
+        s = (1 / math.pi) * math.acos(1 - 2 * p0)
+        q_bias = math.log(s / (1 - s))
+        dp_dpre = 0.5 * math.pi * math.sin(math.pi * s) * s * (1 - s)
+        q_scale = target_slope / max(dp_dpre, 1e-6)
+        with torch.no_grad():
+            lif.q_bias.fill_(q_bias)
+            lif.q_scale.fill_(q_scale)
+            lif.quantum_leak = 0.0
+
+    def _quantum_prob(self, delta, mod_for_prob=None):
+        """
+        delta: (B,N) = V - V_th_eff
+        returns: p in [0,1], shape (B,N)
+        """
+        pre = self.q_scale * delta + self.q_bias - self.quantum_leak
+        if self.neuromod_mode == "prob_slope" and (mod_for_prob is not None):
+            pre = pre * (1.0 + self.neuromod_strength * mod_for_prob)
+
+        theta = math.pi * torch.sigmoid(pre)
+        # p(|1>) = sin^2(θ/2) = 0.5*(1 - cos θ)
+        p = 0.5 * (1.0 - torch.cos(theta))
+        return p.clamp_(0.0, 1.0)
 
     def forward(self, I: torch.Tensor, external_modulation: torch.Tensor = None) -> torch.Tensor:
         """
@@ -232,19 +289,61 @@ class LIFNeuronGroup(nn.Module):
             V_th_eff = V_th_eff.to(I.device)
         V_th_eff = V_th_eff.expand(I.shape[0], -1)
 
-        I_eff = I * self.synaptic_efficiency + self.neuromodulator - self.adaptation_current
-        dV = (I_eff - self.V) / (self.tau if isinstance(self.tau, torch.Tensor) else torch.tensor(self.tau, device=I.device))
+        B, N = I.shape
+        m = self._expand_like(self.neuromodulator.to(I.device), I)  # (B,N)
+        V_th_eff = self.V_th.to(I.device).view(1, -1).expand(B, -1)
+
+        # Neuromodulations-Modis
+        match self.neuromod_mode:
+            case "gain":
+                # Gain: (1 + s*m) * I
+                gain = 1.0 + self.neuromod_strength * m
+                I_eff = gain * I * self.synaptic_efficiency - self.adaptation_current
+                mod_for_prob = None
+            case "threshold":
+                # Threshold-Shift: V_th_eff += s*m
+                V_th_eff = V_th_eff + self.neuromod_strength * m
+                I_eff = I * self.synaptic_efficiency - self.adaptation_current
+                mod_for_prob = None
+            case "prob_slope":
+                I_eff = I * self.synaptic_efficiency - self.adaptation_current
+                mod_for_prob = m
+            case "off" | None:
+                I_eff = I * self.synaptic_efficiency - self.adaptation_current
+                mod_for_prob = None
+            case _:
+                raise ValueError(f"Unknown neuromodulation mode: {self.neuromod_mode}")
+
+        dV = (I_eff - self.V) / (
+            self.tau if isinstance(self.tau, torch.Tensor) else torch.tensor(self.tau, device=I.device))
         self.V = self.V + dV * self.dt + (noise if noise is not None else 0.0)
 
         if self.quantum_mode:
-            self.spikes = self.get_quantum_spikes(self.V, V_th_eff, self.quantum_leak, self.quantum_threshold)
-            self.spike_values = self.spikes.float()
+            self.init_quantum()
+            delta = self.V - V_th_eff
+            p = self._quantum_prob(delta, mod_for_prob=mod_for_prob)
+
+            if self.training:
+                u = torch.rand_like(p)
+                y_hard = (u < p).float()
+                y = p + (y_hard - p).detach()  # STE
+                self.spike_values = y
+                self.spikes = y_hard.bool()
+            else:
+                self.spikes = (torch.rand_like(p) < p)
+                self.spike_values = self.spikes.float()
         else:
             delta = self.V - V_th_eff
 
             if self.stochastic:
                 if self.allow_dynamic_spike_probability:
-                    p, _ = self.dynamic_spike_probability(delta, self.spikes)
+                    p, _ = self.dynamic_spike_probability(
+                        delta,
+                        prev_spike_float=self.spike_values,
+                        mod=mod_for_prob,
+                        mod_strength=self.neuromod_strength,
+                        mod_mode=("prob_slope" if self.neuromod_mode == "prob_slope" else "none")
+                    )
                 else:
                     p = torch.sigmoid(delta)
 
@@ -253,12 +352,12 @@ class LIFNeuronGroup(nn.Module):
                     y_hard = (u < p).float()
                     y = p + (y_hard - p).detach()
                     self.spike_values = y
-                    self.spikes = y_hard.bool()     # bool for Reset/Logging
+                    self.spikes = y_hard.bool()  # bool for Reset/Logging
                 else:
                     self.spikes = (torch.rand_like(p) < p)
                     self.spike_values = self.spikes.float()
             else:
-                y = self.surrogate_fn(delta)        # float, 0/1 forward with Surrogate-Gradient
+                y = self.surrogate_fn(delta)  # float, 0/1 forward with Surrogate-Gradient
                 self.spike_values = y
                 # Bool for the reset; delta>=0 is cleaner than y>0
                 self.spikes = (delta >= 0)
@@ -304,6 +403,7 @@ class LIFNeuronGroup(nn.Module):
                     qml.RY(mem, wires=0)
                     qml.RY(-leak, wires=0)
                     return qml.expval(qml.PauliZ(0))
+
                 z = qc()
                 fire = float(z) < math.cos(threshold)
                 spikes[b, n] = fire
