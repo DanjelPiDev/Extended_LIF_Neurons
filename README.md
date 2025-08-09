@@ -20,6 +20,7 @@
 streamlit run src/lif_streamlit_dashboard.py
 ```
 ![Streamlit Dashboard](./src/Images/ui_preview.png)
+![Streamlit Dashboard](./src/Images/ui_preview_2.png)
 
 
 
