@@ -247,7 +247,7 @@ pip install -e .
 
 or just use the following command inside your project:
 ```bash
-pip install git+https://github.com/NullPointerExcy/Extended_LIF_Neurons
+pip install git+https://github.com/DanjelPiDev/Extended_LIF_Neurons
 ```
 
 #### PyTorch Integration
