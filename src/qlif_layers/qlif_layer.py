@@ -1,12 +1,12 @@
-# layers/torch_layers.py
+# qlif_layers/torch_layers.py
 import torch
 import torch.nn as nn
-from lif.lif_neuron_group import LIFNeuronGroup
+from neurons.qlif import QLIF
 
-class LIFLayer(nn.Module):
+class QLIFLayer(nn.Module):
     def __init__(self, **kwargs):
         super().__init__()
-        self.lif_group = LIFNeuronGroup(**kwargs)
+        self.lif_group = QLIF(**kwargs)
 
     def forward(self, input_seq: torch.Tensor, external_modulation: torch.Tensor = None, return_extras: bool = False):
         timesteps, batch_size, num_neurons = input_seq.shape

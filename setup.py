@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="extended_lif_neurons",
+    name="qlif_neurons",
     version="0.6.0",
     packages=find_packages(where="src"),
     package_dir={"": "src"},
@@ -11,11 +11,11 @@ setup(
         "matplotlib",
         "pennylane"
     ],
-    description="Advanced LIF neuron model with dynamic spike probability, adaptive thresholds, "
-                "synaptic plasticity, neuromodulation, and a hybrid quantum mode for biologically and "
-                "quantum-inspired spiking behavior. Features include membrane potential tracking, "
-                "deterministic/stochastic/quantum spike generation, adaptive excitability, "
-                "and PyTorch integration.",
+    description="Quantum-inspired Leaky Integrate-and-Fire (QLIF) neurons for PyTorch. "
+                "Implements adaptive thresholds, dynamic spike probabilities, synaptic plasticity, "
+                "and neuromodulation, with an optional qubit-based spike decision mechanism. "
+                "Supports deterministic, stochastic, and quantum spike generation, "
+                "membrane potential tracking, and seamless integration into spiking neural networks.",
     author="DanjelPiDev",
-    url="https://github.com/DanjelPiDev/Extended_LIF_Neurons",
+    url="https://github.com/DanjelPiDev/QLIF-Neurons",
 )

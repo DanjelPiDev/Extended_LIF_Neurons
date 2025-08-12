@@ -4,8 +4,8 @@ import pennylane as qml
 import torch
 import torch.nn as nn
 
-from lif.sg.spike_function import SpikeFunction
-from lif.probability.dynamic_spike_probability import DynamicSpikeProbability
+from neurons.sg.spike_function import SpikeFunction
+from neurons.probability.dynamic_spike_probability import DynamicSpikeProbability
 
 
 def get_surrogate_fn(name, alpha):
@@ -21,10 +21,9 @@ def get_surrogate_fn(name, alpha):
         raise ValueError(f"Unknown surrogate gradient function: {name}")
 
 
-class LIFNeuronGroup(nn.Module):
+class QLIF(nn.Module):
     """
-    A vectorized LIF neuron model for multiple neurons.
-    Because the LIFNeuron is inefficient for large neuron counts.
+    A vectorized QLIF neuron model for multiple neurons.
     """
 
     def __init__(self,
@@ -56,7 +55,7 @@ class LIFNeuronGroup(nn.Module):
                  learnable_threshold: bool = True,
                  learnable_tau: bool = False,
                  learnable_eta: bool = False,
-                 quantum_mode: bool = False,
+                 quantum_mode: bool = True,
                  quantum_threshold: float = 0.7,
                  quantum_leak: float = 0.1,
                  quantum_wire: int = 4,
@@ -125,7 +124,7 @@ class LIFNeuronGroup(nn.Module):
         assert quantum_leak >= 0, "quantum_leak must be non-negative."
         assert quantum_wire > 0, "quantum_wire must be a positive integer."
 
-        super(LIFNeuronGroup, self).__init__()
+        super(QLIF, self).__init__()
         self.num_neurons = num_neurons
 
         shape = (1, num_neurons)
@@ -174,7 +173,7 @@ class LIFNeuronGroup(nn.Module):
         self.quantum_wire = quantum_wire
 
         self.q_scale = nn.Parameter(torch.tensor(1.0))  # scales delta to quantum scale
-        self.q_bias = nn.Parameter(torch.tensor(0.0))  # Angel offset
+        self.q_bias = nn.Parameter(torch.tensor(0.0))  # Angle offset
         self.register_buffer("_qnode_ready", torch.tensor(0, dtype=torch.int8))
 
         self.register_buffer("V", torch.zeros(1, num_neurons))
@@ -221,6 +220,18 @@ class LIFNeuronGroup(nn.Module):
             return x.expand_as(ref)
         return x
 
+    @staticmethod
+    def init_quantum(lif, p0=0.02, target_slope=0.15):
+        import math, torch
+        s = (1 / math.pi) * math.acos(1 - 2 * p0)
+        q_bias = math.log(s / (1 - s))
+        dp_dpre = 0.5 * math.pi * math.sin(math.pi * s) * s * (1 - s)
+        q_scale = target_slope / max(dp_dpre, 1e-6)
+        with torch.no_grad():
+            lif.q_bias.fill_(q_bias)
+            lif.q_scale.fill_(q_scale)
+            lif.quantum_leak = 0.0
+
     def _build_qnode_if_needed(self):
         if bool(self._qnode_ready.item()):
             return
@@ -234,17 +245,6 @@ class LIFNeuronGroup(nn.Module):
 
         self._qnode = qnode
         self._qnode_ready.fill_(1)
-
-    def init_quantum(lif, p0=0.02, target_slope=0.15):
-        import math, torch
-        s = (1 / math.pi) * math.acos(1 - 2 * p0)
-        q_bias = math.log(s / (1 - s))
-        dp_dpre = 0.5 * math.pi * math.sin(math.pi * s) * s * (1 - s)
-        q_scale = target_slope / max(dp_dpre, 1e-6)
-        with torch.no_grad():
-            lif.q_bias.fill_(q_bias)
-            lif.q_scale.fill_(q_scale)
-            lif.quantum_leak = 0.0
 
     def _quantum_prob(self, delta, mod_for_prob=None):
         """

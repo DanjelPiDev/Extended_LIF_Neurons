@@ -10,7 +10,7 @@
 
 > I developed my own implementation of LIF neurons because
 > existing libraries did not meet my specific requirements.
-> I also implemented PyTorch-compatible layers for LIF neurons,
+> I also implemented PyTorch-compatible qlif_layers for LIF neurons,
 > enabling their integration into neural network models.
 
 > Now with an streamlit dashboard for easy visualization and interaction!
@@ -38,7 +38,7 @@ Key features include:
 - **Quantum LIF Mode**: Use quantum circuits (Qubits, RY gates, measurement) to probabilistically decide spiking, allowing simulation of quantum-inspired neuronal behavior.
 - **Dynamic Adaptation**: Mechanisms that adjust neuron excitability based on recent activity.
 - **Neuromodulation**: Integration of external signals (e.g., reward signals) to modulate firing behavior.
-- **PyTorch Integration**: Fully PyTorch-compatible layers enable seamless incorporation into larger neural network
+- **PyTorch Integration**: Fully PyTorch-compatible qlif_layers enable seamless incorporation into larger neural network
   architectures.
 
 This framework not only allows for comprehensive simulations and comparisons of spiking behaviors across 
@@ -87,7 +87,7 @@ dynamics into modern machine learning workflows.
 | ``learnable_threshold``	             | `True`	      | If true, the threshold voltage is learnable and can be updated during training.                                                                                                                       |
 | ``learnable_tau``	                    | `False`	     | If true, the membrane time constant tau is learnable and can be updated during training.                                                                                                              |
 | ``learnable_eta``	                    | `False`	     | If true, the adaptation rate eta is learnable and can be updated during training.                                                                                                                     |
-| ``quantum_mode``	                  | `False`	     | If true, enables quantum mode for spike generation using PennyLane. In this mode, spikes are generated based on quantum circuit measurements (Qubits, RY gates).                                      |
+| ``quantum_mode``	                  | `True`	      | If true, enables quantum mode for spike generation using PennyLane. In this mode, spikes are generated based on quantum circuit measurements (Qubits, RY gates).                                      |
 | ``quantum_wire`` | 4            | Number of Qubits (wires) used per neuron (each neuron can use its own quantum circuit if desired).                                                                                                    |
 | ``quantum_threshold`` | 0.7          | Quantum decision threshold (as cos(theta)): lower values = more selective, higher = more spikes.                                                                                                      |
 | ``quantum_leak`` | 0.1          | Quantum leak, applied as an RY rotation after each update (emulates biological leak in quantum state).                                                                                                |
@@ -247,32 +247,32 @@ pip install -e .
 
 or just use the following command inside your project:
 ```bash
-pip install git+https://github.com/DanjelPiDev/Extended_LIF_Neurons
+pip install git+https://github.com/DanjelPiDev/QLIF-Neurons.git
 ```
 
 #### PyTorch Integration
 
-This repository also includes PyTorch-compatible layers for
+This repository also includes PyTorch-compatible qlif_layers for
 LIF neurons. Below is an example of using the
 LIFLayer class with PyTorch:
 
 ```python
 import torch
-from layers.torch_layers import LIFLayer
+from qlif_layers.qlif_layer import QLIFLayer
 
 # Initialize neuron group
-lif = LIFLayer(
-    num_neurons=128,
-    V_th=1.5,
-    tau=30.0,
-    stochastic=True,
-    noise_std=0.05,
-    use_adaptive_threshold=True
+neurons = QLIFLayer(
+  num_neurons=128,
+  V_th=1.5,
+  tau=30.0,
+  stochastic=True,
+  noise_std=0.05,
+  use_adaptive_threshold=True
 ).to("cuda")
 
 # Simulate 100 timesteps
 input_current = torch.randn(100, 1, 128).to("cuda")  # (timesteps, batch, neurons)
-spikes, voltages = lif(input_current)
+spikes, voltages = neurons(input_current)
 
 # Visualize
 import matplotlib.pyplot as plt

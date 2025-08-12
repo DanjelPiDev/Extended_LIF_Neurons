@@ -3,7 +3,7 @@ import torch
 print(torch.__version__)
 import numpy as np
 import matplotlib.pyplot as plt
-from layers.torch_layers import LIFLayer
+from qlif_layers.qlif_layer import QLIFLayer
 
 # --------------------------
 # helpers
@@ -27,7 +27,7 @@ def generate_input(timesteps, batch_size, num_neurons, noise_level):
 
 
 def run_simulation(config, input_current, ext_mod, want_extras=False):
-    lif = LIFLayer(num_neurons=config["num_neurons"], **config["lif_args"])
+    lif = QLIFLayer(num_neurons=config["num_neurons"], **config["lif_args"])
     lif.eval()
     with torch.no_grad():
         if want_extras:
