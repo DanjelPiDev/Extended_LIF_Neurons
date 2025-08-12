@@ -177,11 +177,6 @@ p  = 0.5 * (1 - cos θ)
 
 Using a sigmoid forces θ ∈ [0, π], making p(Δ) **monotonic increasing** (no periodic hotspots).
 
-> **Neuromodulation (optional):**  
-> With `neuromod_mode="prob_slope"`, we scale the pre-activation  
-> `pre = q_scale * Δ + q_bias - leak` by `(1 + s * m)`,  
-> where `m` is the neuromodulator and `s` the `neuromod_strength`.
-
 ---
 
 ### 2) Why monotonic mapping?
@@ -203,27 +198,6 @@ The sigmoid mapping fixes that.
 Instead of raising V_th, calibrate the two quantum parameters:
 
 - **Baseline firing** at Δ = 0: choose a small p₀ ∈ [0.01, 0.05].
-
-```
-s        = (1 / π) * arccos(1 - 2 * p₀)
-q_bias   = logit(s) = ln(s / (1 - s))
-```
-
-- **Steepness** around Δ = 0: choose a target slope dp/dΔ|₀ (e.g. 0.1–0.2).
-
-```
-dp/dpre @Δ=0 = (π / 2) * sin(π * s) * s * (1 - s)
-q_scale      = target_slope / max(dp/dpre, 1e-6)
-```
-
-**Recommended starting values:**
-
-```
-p₀ ≈ 0.02  =>  q_bias ≈ -2.3
-q_scale ≈ 2 – 4
-quantum_leak = 0.0  (initially)
-```
-
 
 
 #### Results
