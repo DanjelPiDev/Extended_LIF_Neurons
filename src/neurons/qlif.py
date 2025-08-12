@@ -6,6 +6,7 @@ import torch.nn as nn
 
 from neurons.sg.spike_function import SpikeFunction
 from neurons.probability.dynamic_spike_probability import DynamicSpikeProbability
+from neurons.sg.q_spike import q_spike_prob, bernoulli_spike
 
 
 def get_surrogate_fn(name, alpha):
@@ -55,6 +56,8 @@ class QLIF(nn.Module):
                  learnable_threshold: bool = True,
                  learnable_tau: bool = False,
                  learnable_eta: bool = False,
+                 learnable_qscale: bool = True,
+                 learnable_qbias: bool = False,
                  quantum_mode: bool = True,
                  quantum_threshold: float = 0.7,
                  quantum_leak: float = 0.1,
@@ -97,6 +100,8 @@ class QLIF(nn.Module):
         :param learnable_threshold: Whether the threshold voltage should be learnable.
         :param learnable_tau: Whether the membrane time constant should be learnable.
         :param learnable_eta: Whether the adaptation rate should be learnable.
+        :param learnable_qscale: Whether the quantum scale factor should be learnable.
+        :param learnable_qbias: Whether the quantum bias should be learnable.
         :param quantum_mode: If True, the neuron group operates in quantum mode, which may affect how spikes are processed.
         :param quantum_threshold: Threshold for quantum spike firing.
         :param quantum_leak: Leakage factor for quantum spikes.
@@ -131,16 +136,6 @@ class QLIF(nn.Module):
         self.V_th = (nn.Parameter(torch.full((num_neurons,), V_th))
                      if learnable_threshold else torch.full((num_neurons,), V_th))
 
-        if learnable_tau:
-            self.tau = nn.Parameter(torch.tensor(float(tau)))
-        else:
-            self.register_buffer("tau", torch.tensor(float(tau)))
-
-        if learnable_eta:
-            self.eta = nn.Parameter(torch.tensor(float(eta)))
-        else:
-            self.register_buffer("eta", torch.tensor(float(eta)))
-
         self.V_reset = V_reset
         self.dt = dt
         self.noise_std = noise_std
@@ -172,8 +167,26 @@ class QLIF(nn.Module):
         self.quantum_leak = quantum_leak
         self.quantum_wire = quantum_wire
 
-        self.q_scale = nn.Parameter(torch.tensor(1.0))  # scales delta to quantum scale
-        self.q_bias = nn.Parameter(torch.tensor(0.0))  # Angle offset
+        if learnable_tau:
+            self.tau = nn.Parameter(torch.tensor(float(tau)))
+        else:
+            self.register_buffer("tau", torch.tensor(float(tau)))
+
+        if learnable_eta:
+            self.eta = nn.Parameter(torch.tensor(float(eta)))
+        else:
+            self.register_buffer("eta", torch.tensor(float(eta)))
+
+        if learnable_qscale:
+            self.q_scale = nn.Parameter(torch.tensor(1.0))
+        else:
+            self.register_buffer("q_scale", torch.tensor(1.0))
+
+        if learnable_qbias:
+            self.q_bias = nn.Parameter(torch.tensor(0.0))
+        else:
+            self.register_buffer("q_bias", torch.tensor(0.0))
+
         self.register_buffer("_qnode_ready", torch.tensor(0, dtype=torch.int8))
 
         self.register_buffer("V", torch.zeros(1, num_neurons))
@@ -182,6 +195,8 @@ class QLIF(nn.Module):
         self.register_buffer("synaptic_efficiency", torch.ones(1, num_neurons))
         self.register_buffer("neuromodulator", torch.ones(1, num_neurons))
         self.register_buffer("spike_values", torch.zeros(1, num_neurons))
+
+        self.init_quantum(p0=0.02, slope0=0.10)
 
     def resize(self, batch_size: int, device: torch.device | None = None):
         dev = device if device is not None else self.V.device
@@ -220,16 +235,18 @@ class QLIF(nn.Module):
             return x.expand_as(ref)
         return x
 
-    def init_quantum(lif, p0=0.02, target_slope=0.15):
-        import math, torch
-        s = (1 / math.pi) * math.acos(1 - 2 * p0)
-        q_bias = math.log(s / (1 - s))
-        dp_dpre = 0.5 * math.pi * math.sin(math.pi * s) * s * (1 - s)
-        q_scale = target_slope / max(dp_dpre, 1e-6)
+    def init_quantum(self, p0: float = 0.02, slope0: float = 0.10):
+        # p0 in (0,1), slope0 ~ dp/d_delta bei delta=0
+        eps = 1e-6
+        # β = arccos(1 - 2 p0)
+        beta = torch.acos(torch.clamp(1.0 - 2.0 * torch.tensor(p0), -1.0 + eps, 1.0 - eps))
+        # α = 2*slope0 / sin(beta)
+        alpha = (2.0 * torch.tensor(slope0)) / torch.clamp(torch.sin(beta), min=eps)
+
         with torch.no_grad():
-            lif.q_bias.fill_(q_bias)
-            lif.q_scale.fill_(q_scale)
-            lif.quantum_leak = 0.0
+            self.q_bias.fill_(float(beta + self.quantum_leak))
+            self.q_scale.fill_(float(alpha))
+
 
     def _build_qnode_if_needed(self):
         if bool(self._qnode_ready.item()):
@@ -245,18 +262,18 @@ class QLIF(nn.Module):
         self._qnode = qnode
         self._qnode_ready.fill_(1)
 
-    def _quantum_prob(self, delta, mod_for_prob=None):
+    def _quantum_prob(self, delta: torch.Tensor, mod_for_prob=None):
         """
         delta: (B,N) = V - V_th_eff
         returns: p in [0,1], shape (B,N)
         """
-        pre = self.q_scale * delta + self.q_bias - self.quantum_leak
-        if self.neuromod_mode == "prob_slope" and (mod_for_prob is not None):
-            pre = pre * (1.0 + self.neuromod_strength * mod_for_prob)
+        alpha = self.q_scale
+        beta = self.q_bias - self.quantum_leak
 
-        theta = math.pi * torch.sigmoid(pre)
-        # p(|1>) = sin^2(θ/2) = 0.5*(1 - cos θ)
-        p = 0.5 * (1.0 - torch.cos(theta))
+        if self.neuromod_mode == "prob_slope" and (mod_for_prob is not None):
+            alpha = alpha * (1.0 + self.neuromod_strength * mod_for_prob)
+
+        p = q_spike_prob(delta, alpha=alpha, beta=beta)
         return p.clamp_(0.0, 1.0)
 
     def forward(self, I: torch.Tensor, external_modulation: torch.Tensor = None) -> torch.Tensor:
@@ -318,9 +335,10 @@ class QLIF(nn.Module):
         self.V = self.V + dV * self.dt + (noise if noise is not None else 0.0)
 
         if self.quantum_mode:
-            self.init_quantum()
             delta = self.V - V_th_eff
             p = self._quantum_prob(delta, mod_for_prob=mod_for_prob)
+            if torch.isnan(p).any():
+                raise RuntimeError("NaN in spike probabilities")
 
             if self.training:
                 u = torch.rand_like(p)
@@ -347,14 +365,14 @@ class QLIF(nn.Module):
                     p = torch.sigmoid(delta)
 
                 if self.training:
-                    u = torch.rand_like(p)
-                    y_hard = (u < p).float()
+                    y_hard = bernoulli_spike(p, training=True)
                     y = p + (y_hard - p).detach()
                     self.spike_values = y
-                    self.spikes = y_hard.bool()  # bool for Reset/Logging
+                    self.spikes = y_hard.bool()
                 else:
-                    self.spikes = (torch.rand_like(p) < p)
-                    self.spike_values = self.spikes.float()
+                    y_hard = bernoulli_spike(p, training=False)
+                    self.spikes = y_hard.bool()
+                    self.spike_values = y_hard
             else:
                 y = self.surrogate_fn(delta)  # float, 0/1 forward with Surrogate-Gradient
                 self.spike_values = y
