@@ -1,6 +1,8 @@
 import streamlit as st
 import torch
+torch.classes.__path__ = []
 print(torch.__version__)
+
 import numpy as np
 import matplotlib.pyplot as plt
 from qlif_layers.qlif_layer import QLIFLayer
