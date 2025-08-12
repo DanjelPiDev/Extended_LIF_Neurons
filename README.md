@@ -15,7 +15,6 @@
 
 > Now with an streamlit dashboard for easy visualization and interaction!
 
-> **NEW: Quantum/Hybrid LIF neurons using Qubit-based spike generation.**
 ```bash
 streamlit run src/lif_streamlit_dashboard.py
 ```
@@ -87,6 +86,8 @@ dynamics into modern machine learning workflows.
 | ``learnable_threshold``	             | `True`	      | If true, the threshold voltage is learnable and can be updated during training.                                                                                                                       |
 | ``learnable_tau``	                    | `False`	     | If true, the membrane time constant tau is learnable and can be updated during training.                                                                                                              |
 | ``learnable_eta``	                    | `False`	     | If true, the adaptation rate eta is learnable and can be updated during training.                                                                                                                     |
+| ``learnable_qscale`` | `True`       | If true, the quantum scale factor (q_scale) is learnable and can be updated during training.                                                                                                          |
+| ``learnable_qbias``  | `False`      | If true, the quantum bias (q_bias) is learnable and can be updated during training.                                                                                                                   |
 | ``quantum_mode``	                  | `True`	      | If true, enables quantum mode for spike generation using PennyLane. In this mode, spikes are generated based on quantum circuit measurements (Qubits, RY gates).                                      |
 | ``quantum_wire`` | 4            | Number of Qubits (wires) used per neuron (each neuron can use its own quantum circuit if desired).                                                                                                    |
 | ``quantum_threshold`` | 0.7          | Quantum decision threshold (as cos(theta)): lower values = more selective, higher = more spikes.                                                                                                      |
