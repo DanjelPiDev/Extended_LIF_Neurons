@@ -293,16 +293,10 @@ class QLIF(nn.Module):
                    if self.neuromod_transform else torch.sigmoid(external_modulation))
             self.neuromodulator = mod.to(I.device)
 
-        V_th_eff = self.V_th.to(I.device).view(1, -1).expand(I.shape[0], -1)
-
         if self.stochastic:
             noise = torch.randn_like(I).mul_(self.noise_std)
         else:
             noise = None
-
-        if V_th_eff.device != I.device:
-            V_th_eff = V_th_eff.to(I.device)
-        V_th_eff = V_th_eff.expand(I.shape[0], -1)
 
         B, N = I.shape
         m = self._expand_like(self.neuromodulator.to(I.device), I)  # (B,N)
