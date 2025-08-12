@@ -27,7 +27,7 @@ def generate_input(timesteps, batch_size, num_neurons, noise_level):
 
 
 def run_simulation(config, input_current, ext_mod, want_extras=False):
-    lif = QLIFLayer(num_neurons=config["num_neurons"], **config["lif_args"])
+    lif = QLIFLayer(num_neurons=config["num_neurons"], **config["qlif_args"])
     lif.eval()
     with torch.no_grad():
         if want_extras:
@@ -78,7 +78,7 @@ def plot_results(spikes, voltages, input_current, title, use_legend, use_quantum
 # UI
 # --------------------------
 st.set_page_config(layout="wide")
-st.title("LIF Neuron Simulator")
+st.title("QLIF Neuron Simulator")
 st.markdown("Visualize different LIF neuron modes with simulated input.")
 
 left, right = st.columns([1, 2], gap="large")
@@ -124,7 +124,6 @@ with left:
         neuromod_mode = "off"
         neuromod_strength = 1.0
 
-    # DSP controls (sichtbar bei DSP-Mode)
     if mode == "Dynamic Spike Probability":
         base_alpha = st.slider("base_alpha (sigmoid slope)", 0.1, 10.0, 5.0, 0.1)
         tau_adapt  = st.slider("tau_adapt (adaptation decay)", 1.0, 100.0, 10.0, 1.0)
@@ -150,7 +149,7 @@ external_mod = torch.sin(torch.linspace(0, 4*np.pi, timesteps)).reshape(-1, 1, 1
 # --------------------------
 # Configs
 # --------------------------
-base_lif_args = {
+base_qlif_args = {
     "V_th": V_th,
     "tau": tau,
     "device": device,
@@ -163,8 +162,8 @@ base_lif_args = {
 configs = {
     "Deterministic (Basic LIF)": {
         "num_neurons": num_neurons,
-        "lif_args": {
-            **base_lif_args,
+        "qlif_args": {
+            **base_qlif_args,
             "stochastic": False,
             "use_adaptive_threshold": False,
             "neuromod_transform": None,
@@ -173,8 +172,8 @@ configs = {
     },
     "Stochastic (Constant Threshold)": {
         "num_neurons": num_neurons,
-        "lif_args": {
-            **base_lif_args,
+        "qlif_args": {
+            **base_qlif_args,
             "stochastic": True,
             "noise_std": 0.05,
             "use_adaptive_threshold": False,
@@ -184,8 +183,8 @@ configs = {
     },
     "Adaptive Threshold": {
         "num_neurons": num_neurons,
-        "lif_args": {
-            **base_lif_args,
+        "qlif_args": {
+            **base_qlif_args,
             "stochastic": False,
             "use_adaptive_threshold": True,
             "eta": eta,
@@ -197,8 +196,8 @@ configs = {
     },
     "Dynamic Spike Probability": {
         "num_neurons": num_neurons,
-        "lif_args": {
-            **base_lif_args,
+        "qlif_args": {
+            **base_qlif_args,
             "stochastic": True,
             "allow_dynamic_spike_probability": True,
             "base_alpha": base_alpha,
@@ -212,12 +211,12 @@ configs = {
     },
     "With Neuromodulation": {
         "num_neurons": num_neurons,
-        "lif_args": {
-            **base_lif_args,
+        "qlif_args": {
+            **base_qlif_args,
             "stochastic": False,
             "use_adaptive_threshold": False,
             "neuromod_transform": neuromodulation_function,
-            "neuromod_mode": neuromod_mode,           # typ. "gain" oder "threshold"
+            "neuromod_mode": neuromod_mode,
             "neuromod_strength": neuromod_strength,
         }
     }
