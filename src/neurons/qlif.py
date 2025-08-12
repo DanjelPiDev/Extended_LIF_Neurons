@@ -57,7 +57,7 @@ class QLIF(nn.Module):
                  learnable_tau: bool = False,
                  learnable_eta: bool = False,
                  learnable_qscale: bool = True,
-                 learnable_qbias: bool = False,
+                 learnable_qbias: bool = True,
                  quantum_mode: bool = True,
                  quantum_threshold: float = 0.7,
                  quantum_leak: float = 0.1,
