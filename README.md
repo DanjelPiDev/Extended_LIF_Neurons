@@ -13,6 +13,12 @@ Adaptive thresholds, dynamic spike probabilities, short-term synaptic plasticity
 > neuromodulation, plus an optional 
 > **qubit-based spike decision** that yields a differentiable, probabilistic spiking mechanism grounded in a 1-qubit model.
 
+### Overview
+Simulating biologically-inspired Leaky Integrate-and-Fire neurons with quantum-inspired spike decision mechanics (**QLIF**)
+vs classical LIF neurons (**Norse LIF**).
+![QLIF Neurons vs. Norse LIF](./src/Images/qlif_vs_norse.gif)
+
+
 ---
 
 ## Quickstart
