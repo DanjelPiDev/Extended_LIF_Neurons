@@ -13,45 +13,82 @@ Adaptive thresholds, dynamic spike probabilities, short-term synaptic plasticity
 > neuromodulation, plus an optional 
 > **qubit-based spike decision** that yields a differentiable, probabilistic spiking mechanism grounded in a 1-qubit model.
 
+---
+
+## Quickstart
+
+### Install
+#### Via clone and pip
+```bash
+git clone https://github.com/DanjelPiDev/QLIF-Neurons.git
+cd QLIF-Neurons
+# install dependencies
+pip install -r requirements.txt
+```
+
+#### Or directly via pip
+```bash
+pip install git+https://github.com/DanjelPiDev/QLIF-Neurons.git
+```
+
+---
+
+### Streamlit Demo
+Run the Streamlit demo to visualize neuron activity and parameters:
 ```bash
 streamlit run src/lif_streamlit_dashboard.py
 ```
-![Streamlit Dashboard](./src/Images/ui_preview.png)
-![Streamlit Dashboard](./src/Images/ui_preview_2.png)
 
 
+<div align="center">
+  <img src="./src/Images/ui_preview.png" width="300" alt="Streamlit Dashboard Preview">
+  <img src="./src/Images/ui_preview_2.png" width="300" alt="Streamlit Dashboard Preview 2">
+</div>
+
+---
+
+### Minimal Example
+Here's a minimal example of using the QLIF neuron layer in PyTorch:
+```python
+import torch
+from qlif_layers.qlif_layer import QLIFLayer
+
+# (T, B, N)
+T, B, N = 100, 1, 128
+inp = torch.randn(T, B, N)
+
+layer = QLIFLayer(
+    num_neurons=N,
+    V_th=1.5,
+    tau=30.0,
+    stochastic=True,
+    noise_std=0.05,
+    use_adaptive_threshold=True,
+    quantum_mode=True,           # default is True to enable QLIF (qubit-based)
+).to("cpu")                      # or "cuda" for GPU
+
+spikes, voltages = layer(inp)    # spikes: (T,B,N) bool / voltages: (T,B,N) float
+```
 
 ---
 
 ## Overview
 
-This repository features an advanced implementation of LIF neurons. Building upon the classic LIF model, it incorporates
-dynamic spike probability, adaptive thresholds, synaptic short-term plasticity, neuromodulatory influences, and a hybrid quantum mode for spike generation using Qubits (via PennyLane).
+In classical LIF neurons, spike decisions are 
+either **deterministic** (hard threshold) or **pseudo-stochastic** through additive noise.  
+**QLIF** replaces this thresholding step with a **single-qubit–based mapping**:
 
-Key features include:
+### Key features include:
 
-- **Membrane Potential Tracking**: Detailed monitoring of voltage dynamics over time.
-- **Spike Generation**: Realistic spike output using deterministic, stochastic, or quantum mechanisms.
-- **Quantum LIF Mode**: Use quantum circuits (Qubits, RY gates, measurement) to probabilistically decide spiking, allowing simulation of quantum-inspired neuronal behavior.
-- **Dynamic Adaptation**: Mechanisms that adjust neuron excitability based on recent activity.
-- **Neuromodulation**: Integration of external signals (e.g., reward signals) to modulate firing behavior.
-- **PyTorch Integration**: Fully PyTorch-compatible qlif_layers enable seamless incorporation into larger neural network
-  architectures.
+- **Adaptive Thresholds** (refractory/homeostasis)
+- **Neuromodulation** (`gain`, `threshold-shift`, `prob-slope`)
+- **Short-term Plasticity** (depression/recovery)
+- **Dynamic Spike Probability** (self-limiting)
+- **QLIF Mode** (qubit-inspired spike decision)
 
 This framework not only allows for comprehensive simulations and comparisons of spiking behaviors across 
 different neuron types but also facilitates the integration of biologically inspired and quantum-inspired 
 dynamics into modern machine learning workflows.
-
-### Key Features
-
-| Feature                   | 	Description                                                             |
-|---------------------------|--------------------------------------------------------------------------|
-| Adaptive Threshold        | 	Threshold increases after spikes, preventing runaway firing             |
-| Stochastic Dynamics       | 	Probabilistic spiking with noise injection                              |
-| Synaptic Plasticity       | 	Short-term depression and recovery of synaptic efficacy                 |
-| Neuromodulation           | 	External signals (e.g., simulated dopamine) modulate excitability       |
-| Dynamic Spike Probability | 	Self-limiting spiking based on recent activity (homeostatic adaptation) |
-| Quantum Mode              | 	Spike generation using quantum circuits (Qubits, RY gates, measurement, PennyLane) |
 
 ### Parameters
 
@@ -220,56 +257,6 @@ with torch.no_grad():
 </div>
 
 ---
-
-### How to Use
-
-#### Installation
-
-Clone this repository and install the required dependencies:
-
-```bash
-pip install -r requirements.txt
-pip install -e .
-```
-
-or just use the following command inside your project:
-```bash
-pip install git+https://github.com/DanjelPiDev/QLIF-Neurons.git
-```
-
-#### PyTorch Integration
-
-This repository also includes PyTorch-compatible qlif_layers for
-LIF neurons. Below is an example of using the
-LIFLayer class with PyTorch:
-
-```python
-import torch
-from qlif_layers.qlif_layer import QLIFLayer
-
-# Initialize neuron group
-neurons = QLIFLayer(
-  num_neurons=128,
-  V_th=1.5,
-  tau=30.0,
-  stochastic=True,
-  noise_std=0.05,
-  use_adaptive_threshold=True
-).to("cuda")
-
-# Simulate 100 timesteps
-input_current = torch.randn(100, 1, 128).to("cuda")  # (timesteps, batch, neurons)
-spikes, voltages = neurons(input_current)
-
-# Visualize
-import matplotlib.pyplot as plt
-
-plt.plot(voltages[:, 0, 0].cpu().numpy())  # First neuron's voltage
-plt.xlabel("Time (ms)")
-plt.ylabel("Membrane Potential")
-plt.show()
-```
-
 
 ### License
 
