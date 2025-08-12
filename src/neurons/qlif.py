@@ -349,6 +349,15 @@ class QLIF(nn.Module):
             else:
                 self.spikes = (torch.rand_like(p) < p)
                 self.spike_values = self.spikes.float()
+
+            if self.allow_dynamic_spike_probability and self.dynamic_spike_probability is not None:
+                _p, _ = self.dynamic_spike_probability(
+                    delta,
+                    prev_spike_float=self.spike_values,
+                    mod=mod_for_prob,
+                    mod_strength=self.neuromod_strength,
+                    mod_mode=("prob_slope" if self.neuromod_mode == "prob_slope" else "off")
+                )
         else:
             delta = self.V - V_th_eff
 
@@ -402,7 +411,7 @@ class QLIF(nn.Module):
         Proof-of-concept for quantum LIF neuron group.
 
         V, V_th, leak, threshold = torch.tensor, shape (batch, num_neurons)
-        Returns: spikes (torch.BoolTensor), shape (batch, num_neurons)
+        :returns spikes (torch.BoolTensor), shape (batch, num_neurons)
         """
         batch_size, num_neurons = V.shape
         spikes = torch.zeros_like(V, dtype=torch.bool)
