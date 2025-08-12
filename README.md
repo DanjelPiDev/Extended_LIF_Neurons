@@ -41,8 +41,8 @@ streamlit run src/lif_streamlit_dashboard.py
 
 
 <div align="center">
-  <img src="./src/Images/ui_preview.png" width="300" alt="Streamlit Dashboard Preview">
-  <img src="./src/Images/ui_preview_2.png" width="300" alt="Streamlit Dashboard Preview 2">
+  <img src="./src/Images/ui_preview.png" width="400" alt="Streamlit Dashboard Preview">
+  <img src="./src/Images/ui_preview_2.png" width="400" alt="Streamlit Dashboard Preview 2">
 </div>
 
 ---
