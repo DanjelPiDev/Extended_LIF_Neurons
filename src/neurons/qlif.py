@@ -340,8 +340,7 @@ class QLIF(nn.Module):
             case _:
                 raise ValueError(f"Unknown neuromodulation mode: {self.neuromod_mode}")
 
-        dV = (I_eff - self.V) / (
-            self.tau if isinstance(self.tau, torch.Tensor) else torch.tensor(self.tau, device=I.device))
+        dV = (I_eff - self.V) / (self.tau if isinstance(self.tau, torch.Tensor) else torch.tensor(self.tau, device=I.device))
         self.V = self.V + dV * self.dt + (noise if noise is not None else 0.0)
 
         if self.quantum_mode:
@@ -398,11 +397,15 @@ class QLIF(nn.Module):
                 # Bool for the reset
                 self.spikes = (delta >= 0)
 
+        s = self.spikes.float()
+        k_reset = 0.3
+        self.V = self.V + s * (self.V_reset - self.V) * k_reset
+
         if self.use_ahp:
             # exp(-dt / tau_ahp)
             tau_ahp = float(self.tau_ahp.item())
             decay_ahp = math.exp(- float(self.dt) / tau_ahp)
-            self.ahp = self.ahp * decay_ahp + self.ahp_jump * self.spikes.float()
+            self.ahp = (self.ahp * decay_ahp + self.ahp_jump * self.spikes.float()).clamp(max=2.0)
 
         s_float = self.spike_values
         self.adaptation_current = self.adaptation_current * self.adaptation_decay + self.spike_increase * s_float
