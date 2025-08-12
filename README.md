@@ -266,5 +266,5 @@ with torch.no_grad():
 
 ### License
 
-This project is licensed under the MIT License. Feel free to use and modify it for your research or personal projects.
+This project is licensed under the [AGPL-3.0 License](./LICENSE).
 
