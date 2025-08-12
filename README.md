@@ -10,7 +10,7 @@
 
 > I developed my own implementation of LIF neurons because
 > existing libraries did not meet my specific requirements.
-> I also implemented PyTorch-compatible qlif_layers for LIF neurons,
+> I also implemented PyTorch-compatible qlif_layers for this QLIF neurons,
 > enabling their integration into neural network models.
 
 > Now with an streamlit dashboard for easy visualization and interaction!
