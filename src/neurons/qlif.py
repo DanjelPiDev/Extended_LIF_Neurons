@@ -62,7 +62,10 @@ class QLIF(nn.Module):
                  quantum_threshold: float = 0.7,
                  quantum_leak: float = 0.1,
                  quantum_wire: int = 4,
-                 reset_mode: str = "soft"
+                 use_ahp: bool = True,
+                 tau_ahp: float = 120.0,
+                 ahp_jump: float = 0.3,
+                 g_ahp: float = 0.2,
                  ):
         """
         Initialize the LIF neuron group with its parameters.
@@ -107,9 +110,10 @@ class QLIF(nn.Module):
         :param quantum_threshold: Threshold for quantum spike firing.
         :param quantum_leak: Leakage factor for quantum spikes.
         :param quantum_wire: Number of quantum wires used in the quantum mode.
-        :param reset_mode (Not in use): Mode for resetting the neuron state after a spike. Options are "soft" or "hard".
-            - "soft": Soft reset, where the voltage is set to V_reset.
-            - "hard": Hard reset, where the voltage is set directly to zero.
+        :param use_ahp: Whether to use an after-spike potential (AHP) mechanism.
+        :param tau_ahp: Time constant for the AHP decay [ms].
+        :param ahp_jump: Increment for the AHP current on spike.
+        :param g_ahp: Coupling strength from AHP to the membrane potential.
         """
         assert num_neurons > 0, "Number of neurons must be positive."
 
@@ -170,7 +174,7 @@ class QLIF(nn.Module):
         self.quantum_threshold = quantum_threshold
         self.quantum_leak = quantum_leak
         self.quantum_wire = quantum_wire
-        self.reset_mode = reset_mode
+        self.use_ahp = use_ahp
 
         if learnable_tau:
             self.tau = nn.Parameter(torch.tensor(float(tau)))
@@ -201,6 +205,11 @@ class QLIF(nn.Module):
         self.register_buffer("neuromodulator", torch.ones(1, num_neurons))
         self.register_buffer("spike_values", torch.zeros(1, num_neurons))
 
+        self.register_buffer("tau_ahp", torch.tensor(float(tau_ahp)))
+        self.register_buffer("ahp", torch.zeros(1, num_neurons))
+        self.register_buffer("g_ahp", torch.tensor(float(g_ahp)))
+        self.register_buffer("ahp_jump", torch.tensor(float(ahp_jump)))
+
         self.init_quantum(p0=0.02, slope0=0.10)
 
     def resize(self, batch_size: int, device: torch.device | None = None):
@@ -212,6 +221,7 @@ class QLIF(nn.Module):
         self.synaptic_efficiency = torch.ones(shape, device=dev)
         self.neuromodulator = torch.ones(shape, device=dev)
         self.spike_values = torch.zeros(shape, device=dev)
+        self.ahp = torch.zeros(shape, device=dev)
         if self.dynamic_spike_probability:
             self.dynamic_spike_probability.resize(batch_size, self.num_neurons, dev)
 
@@ -222,6 +232,7 @@ class QLIF(nn.Module):
         self.adaptation_current.zero_()
         self.synaptic_efficiency.fill_(1.0)
         self.neuromodulator.fill_(1.0)
+        self.ahp.zero_()
         if self.dynamic_spike_probability:
             self.dynamic_spike_probability.reset(self.V.shape[0],
                                                  self.num_neurons,
@@ -307,29 +318,29 @@ class QLIF(nn.Module):
         m = self._expand_like(self.neuromodulator.to(I.device), I)  # (B,N)
         V_th_eff = self.V_th.to(I.device).view(1, -1).expand(B, -1)
 
+        g_ahp = float(self.g_ahp.item())
+        ahp_term = g_ahp * self.ahp
+
         # Neuromodulations-Modis
         match self.neuromod_mode:
             case "gain":
-                # Gain: (1 + s*m) * I
                 gain = 1.0 + self.neuromod_strength * m
-                I_eff = gain * I * self.synaptic_efficiency - self.adaptation_current
+                I_eff = gain * I * self.synaptic_efficiency - self.adaptation_current - ahp_term
                 mod_for_prob = None
             case "threshold":
-                # Threshold-Shift: V_th_eff += s*m
                 V_th_eff = V_th_eff + self.neuromod_strength * m
-                I_eff = I * self.synaptic_efficiency - self.adaptation_current
+                I_eff = I * self.synaptic_efficiency - self.adaptation_current - ahp_term
                 mod_for_prob = None
             case "prob_slope":
-                I_eff = I * self.synaptic_efficiency - self.adaptation_current
+                I_eff = I * self.synaptic_efficiency - self.adaptation_current - ahp_term
                 mod_for_prob = m
             case "off" | None:
-                I_eff = I * self.synaptic_efficiency - self.adaptation_current
+                I_eff = I * self.synaptic_efficiency - self.adaptation_current - ahp_term
                 mod_for_prob = None
             case _:
                 raise ValueError(f"Unknown neuromodulation mode: {self.neuromod_mode}")
 
-        dV = (I_eff - self.V) / (
-            self.tau if isinstance(self.tau, torch.Tensor) else torch.tensor(self.tau, device=I.device))
+        dV = (I_eff - self.V) / (self.tau if isinstance(self.tau, torch.Tensor) else torch.tensor(self.tau, device=I.device))
         self.V = self.V + dV * self.dt + (noise if noise is not None else 0.0)
 
         if self.quantum_mode:
@@ -386,13 +397,15 @@ class QLIF(nn.Module):
                 # Bool for the reset
                 self.spikes = (delta >= 0)
 
-        if self.reset_mode == "hard":
-            self.V.masked_fill_(self.spikes, self.V_reset)
-        elif self.reset_mode == "soft":
-            # TODO: Find a better way to reset the voltage, for a more realistic soft reset
-            self.V.masked_fill_(self.spikes, self.V_reset)
-        else:
-            raise ValueError(f"Unknown reset_mode: {self.reset_mode}")
+        s = self.spikes.float()
+        k_reset = 0.3
+        self.V = self.V + s * (self.V_reset - self.V) * k_reset
+
+        if self.use_ahp:
+            # exp(-dt / tau_ahp)
+            tau_ahp = float(self.tau_ahp.item())
+            decay_ahp = math.exp(- float(self.dt) / tau_ahp)
+            self.ahp = (self.ahp * decay_ahp + self.ahp_jump * self.spikes.float()).clamp(max=2.0)
 
         s_float = self.spike_values
         self.adaptation_current = self.adaptation_current * self.adaptation_decay + self.spike_increase * s_float
