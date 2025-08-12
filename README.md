@@ -8,12 +8,10 @@
 
 ### Development Notes
 
-> I developed my own implementation of LIF neurons because
-> existing libraries did not meet my specific requirements.
-> I also implemented PyTorch-compatible qlif_layers for this QLIF neurons,
-> enabling their integration into neural network models.
-
-> Now with an streamlit dashboard for easy visualization and interaction!
+> **Quantum-inspired Leaky Integrate-and-Fire (QLIF) neurons for PyTorch.**  
+Adaptive thresholds, dynamic spike probabilities, short-term synaptic plasticity, 
+> neuromodulation, plus an optional 
+> **qubit-based spike decision** that yields a differentiable, probabilistic spiking mechanism grounded in a 1-qubit model.
 
 ```bash
 streamlit run src/lif_streamlit_dashboard.py
@@ -145,8 +143,8 @@ I_{effective} = I * synaptic_{efficiency} + neuromodulator - adaptation_{current
 
 ## Quantum Mode, Theory, Mapping & Calibration
 
-This project includes a *qubit-based* spike generator for LIF neurons.  
-The goal is to get a **differentiable, calibrated, and vectorized** probabilistic spike mechanism that can be trained end-to-end, while still being grounded in a simple quantum circuit.
+This project implements a **qubit-inspired spike generator** for LIF neurons.  
+The goal is a **differentiable, calibrated, and vectorized** probabilistic spike mechanism that can be trained end-to-end, while being grounded in a simple quantum circuit model.
 
 ### 1) One-Qubit Circuit (what we actually compute)
 
@@ -159,8 +157,10 @@ prepare |0> --RY(θ)--> measure Z
 The probability of measuring `|1>` is:
 
 ```
-p(|1>) = sin²(θ / 2) = 0.5 * (1 - cos θ)
+p(|1>) = sin²(θ/2) = 0.5 * (1 - cos θ)
 ```
+
+### 2) Mapping the membrane gap Δ to θ
 
 Then map the neuron's **membrane gap**:
 
@@ -168,37 +168,49 @@ Then map the neuron's **membrane gap**:
 Δ = V - V_th
 ```
 
-to the rotation angle θ through a **monotonic squashing**:
+and map it linearly to the rotation angle:
 
 ```
-θ = π * sigmoid(q_scale * Δ + q_bias - quantum_leak)
-p  = 0.5 * (1 - cos θ)
+θ = α · Δ + β
+p = 0.5 * (1 - cos θ)
 ```
+- **α = q_scale** (learnable if `learnable_qscale=True`)
+- **β = q_bias; quantum_leak** (learnable if `learnable_qbias=True`)
 
-Using a sigmoid forces θ ∈ [0, π], making p(Δ) **monotonic increasing** (no periodic hotspots).
+This is computed in `_quantum_prob` using the shared helper `q_spike_prob(Δ, α, β)`.  
+The mapping is **periodic** in Δ because of the cosine, this is intentional here and 
+matches the original 1-qubit model. If strict monotonicity 
+is desired, a squashing function (e.g. sigmoid) can be applied 
+before scaling θ (not used in the current default).
 
 ---
 
-### 2) Why monotonic mapping?
+### 3) Why monotonic mapping?
 
-If you use:
+Instead of adjusting `V_th` to control base firing rates, we calibrate α and β directly so that:
+
+- **Baseline firing probability** at Δ = 0 matches a target `p₀` (e.g. 0.02)
+- **Local slope** `s₀ = (∂p/∂Δ)|Δ=0` matches a target value (e.g. 0.10)
 
 ```
-θ = q_scale * Δ + q_bias - leak
+p(Δ) = 0.5 * (1 - cos(αΔ + β))
 ```
+```
+β = arccos(1 - 2p₀)
+α = (2 · s₀) / sin(β)
+```
+In code (`init_quantum`):
+```python
+eps = 1e-6
+beta = torch.acos(torch.clamp(1.0 - 2.0 * torch.tensor(p0), -1.0 + eps, 1.0 - eps))
+alpha = (2.0 * torch.tensor(slope0)) / torch.clamp(torch.sin(beta), min=eps)
 
-without the sigmoid, `p = 0.5 * (1 - cos θ)` becomes **periodic** in Δ.  
-That often yields high spike probabilities even for **negative** Δ, driving the adaptation current up and pushing membrane voltages negative.  
-The sigmoid mapping fixes that.
+with torch.no_grad():
+  self.q_bias.fill_(float(beta + self.quantum_leak))
+  self.q_scale.fill_(float(alpha))
+```
 
 ---
-
-### 3) Calibration (no need to crank up V_th)
-
-Instead of raising V_th, calibrate the two quantum parameters:
-
-- **Baseline firing** at Δ = 0: choose a small p₀ ∈ [0.01, 0.05].
-
 
 #### Results
 
@@ -258,63 +270,6 @@ plt.ylabel("Membrane Potential")
 plt.show()
 ```
 
-### Expected Behavior
-
-| Mode                | 	Characteristics                                                                   |
-|---------------------|------------------------------------------------------------------------------------|
-| Deterministic	      | Regular spiking when input > threshold; reset to V_reset after spike               |
-| Stochastic          | 	Irregular spiking, rate depends on noise_std and V-V_th difference                |
-| Adaptive Threshold  | 	Spike rate decreases over time as threshold (V_th) rises                          |
-| Dynamic Probability | 	Initial high spiking followed by self-stabilization due to adaptation             |
-| Neuromodulation     | 	External signals boost/reduce excitability (e.g., increased spike rate on reward) |
-
----
-
-### Biological Interpretation
-
-This implementation captures three key biological phenomena:
-
-- Leaky Integration: Membrane potential decays over time (tau)
-
-- Refractoriness: Adaptation current reduces excitability post-spike
-
-- Homeostasis: Dynamic spike probability prevents hyperactivity
-
----
-
-### Performance Analysis
-
-> Tested on NVIDIA RTX 4080 Super (16GB VRAM) with PyTorch 2.7.0+cu118
-
-#### Memory Scaling
-
-##### Complexity: 𝓞(n) (linear)
-
-- 128 neurons → 0.2 MB
-- 1 million neurons → 490 MB
-- 16 million neurons → 15.7 GB
-
-Memory usage grows linearly with neuron count, following the 𝓞(n) complexity:
-
-```math
-Memory (MB) ≈ 0.03 * num_neurons
-```
-
-#### Computation Time Scaling
-
-##### Complexity: 𝓞(n) (linear with parallelization factor)
-
-- 128 neurons - 8 million neurons: ~0.05–0.42s per 100 timesteps
-- 16 million neurons: 2.27s per 100 timesteps
-
-Despite apparent log-scale plot curvature, actual complexity is linear.
-
-<div align="center">
-    <img src="./src/Images/performance_scaling_v2.png" width="1000">
-    <p>Figure 2: Plot of memory and time scaling (x and y are log-scaled), with up to 16 million neurons.</p>
-</div>
-
----
 
 ### License
 
