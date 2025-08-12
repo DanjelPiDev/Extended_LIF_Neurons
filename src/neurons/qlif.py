@@ -62,6 +62,7 @@ class QLIF(nn.Module):
                  quantum_threshold: float = 0.7,
                  quantum_leak: float = 0.1,
                  quantum_wire: int = 4,
+                 reset_mode: str = "soft"
                  ):
         """
         Initialize the LIF neuron group with its parameters.
@@ -106,6 +107,9 @@ class QLIF(nn.Module):
         :param quantum_threshold: Threshold for quantum spike firing.
         :param quantum_leak: Leakage factor for quantum spikes.
         :param quantum_wire: Number of quantum wires used in the quantum mode.
+        :param reset_mode (Not in use): Mode for resetting the neuron state after a spike. Options are "soft" or "hard".
+            - "soft": Soft reset, where the voltage is set to V_reset.
+            - "hard": Hard reset, where the voltage is set directly to zero.
         """
         assert num_neurons > 0, "Number of neurons must be positive."
 
@@ -166,6 +170,7 @@ class QLIF(nn.Module):
         self.quantum_threshold = quantum_threshold
         self.quantum_leak = quantum_leak
         self.quantum_wire = quantum_wire
+        self.reset_mode = reset_mode
 
         if learnable_tau:
             self.tau = nn.Parameter(torch.tensor(float(tau)))
@@ -381,7 +386,13 @@ class QLIF(nn.Module):
                 # Bool for the reset
                 self.spikes = (delta >= 0)
 
-        self.V.masked_fill_(self.spikes, self.V_reset)
+        if self.reset_mode == "hard":
+            self.V.masked_fill_(self.spikes, self.V_reset)
+        elif self.reset_mode == "soft":
+            # TODO: Find a better way to reset the voltage, for a more realistic soft reset
+            self.V.masked_fill_(self.spikes, self.V_reset)
+        else:
+            raise ValueError(f"Unknown reset_mode: {self.reset_mode}")
 
         s_float = self.spike_values
         self.adaptation_current = self.adaptation_current * self.adaptation_decay + self.spike_increase * s_float
