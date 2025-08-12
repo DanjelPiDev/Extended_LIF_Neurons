@@ -1,4 +1,4 @@
-# Extended LIF Neurons
+# QLIF Neurons
 
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.44.1-blue.svg)](https://streamlit.io/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.7.0+cu118-red.svg)](https://pytorch.org/)
