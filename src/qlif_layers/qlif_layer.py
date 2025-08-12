@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 from neurons.qlif import QLIF
 
+
 class QLIFLayer(nn.Module):
     def __init__(self, **kwargs):
         super().__init__()
@@ -15,11 +16,11 @@ class QLIFLayer(nn.Module):
         dev = input_seq.device
         self.qlifs.resize(B, device=dev)
 
-        spike_trace   = torch.zeros_like(input_seq, dtype=torch.bool)
+        spike_trace = torch.zeros_like(input_seq, dtype=torch.bool)
         voltage_trace = torch.zeros_like(input_seq)
 
         want_quantum_extras = return_extras and bool(self.qlifs.quantum_mode)
-        want_dsp_extras     = return_extras and (self.qlifs.dynamic_spike_probability is not None)
+        want_dsp_extras = return_extras and (self.qlifs.dynamic_spike_probability is not None)
 
         q_scale_trace = None
         adaptcur_trace = None
@@ -27,8 +28,8 @@ class QLIFLayer(nn.Module):
         alpha_trace = None
 
         if want_quantum_extras:
-            q_scale_trace   = torch.zeros(T, B, N, device=dev)
-            adaptcur_trace  = torch.zeros(T, B, N, device=dev)
+            q_scale_trace = torch.zeros(T, B, N, device=dev)
+            adaptcur_trace = torch.zeros(T, B, N, device=dev)
 
         if want_dsp_extras:
             dsp = self.qlifs.dynamic_spike_probability
@@ -38,16 +39,16 @@ class QLIFLayer(nn.Module):
             base_alpha = float(dsp.base_alpha)
 
         for t in range(T):
-            I_t  = input_seq[t]
-            m_t  = external_modulation[t] if external_modulation is not None else None
+            I_t = input_seq[t]
+            m_t = external_modulation[t] if external_modulation is not None else None
             _ = self.qlifs(I_t, m_t)  # step
 
-            spike_trace[t]   = self.qlifs.spikes
+            spike_trace[t] = self.qlifs.spikes
             voltage_trace[t] = self.qlifs.V
 
             if want_quantum_extras:
                 q_like = self.qlifs._expand_like(self.qlifs.q_scale.to(dev), self.qlifs.V)
-                q_scale_trace[t]  = q_like
+                q_scale_trace[t] = q_like
                 adaptcur_trace[t] = self.qlifs.adaptation_current
 
             if want_dsp_extras:
@@ -64,7 +65,7 @@ class QLIFLayer(nn.Module):
                 extras["adaptation_current_trace"] = adaptcur_trace
             if want_dsp_extras:
                 extras["adaptation_trace"] = adapt_trace
-                extras["alpha_eff_trace"]  = alpha_trace
+                extras["alpha_eff_trace"] = alpha_trace
             return spike_trace, voltage_trace, extras
 
         return spike_trace, voltage_trace

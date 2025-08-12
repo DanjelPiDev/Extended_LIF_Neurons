@@ -247,7 +247,6 @@ class QLIF(nn.Module):
             self.q_bias.fill_(float(beta + self.quantum_leak))
             self.q_scale.fill_(float(alpha))
 
-
     def _build_qnode_if_needed(self):
         if bool(self._qnode_ready.item()):
             return
