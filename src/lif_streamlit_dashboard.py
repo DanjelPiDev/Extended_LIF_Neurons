@@ -66,14 +66,23 @@ def plot_results(spikes, voltages, input_current, title, use_legend, use_quantum
 
     if extras is not None and (show_adaptation or show_alpha):
         fig2, ax2 = plt.subplots(figsize=(10, 3))
-        ax2.set_title("DynamicSpikeProbability traces")
-        if show_adaptation and "adaptation_trace" in extras:
-            ax2.plot(extras["adaptation_trace"], label="adaptation")
-        if show_alpha and "alpha_eff_trace" in extras:
-            ax2.plot(extras["alpha_eff_trace"], label="alpha_eff")
+        ax2.set_title("Decision Traces")
+
+        if use_quantum:
+            if show_adaptation and "adaptation_current_trace" in extras:
+                ax2.plot(extras["adaptation_current_trace"], label="adaptation_current")
+            if show_alpha and "q_scale_trace" in extras:
+                ax2.plot(extras["q_scale_trace"], label="q_scale")
+        else:
+            if show_adaptation and "adaptation_trace" in extras:
+                ax2.plot(extras["adaptation_trace"], label="adaptation (DSP)")
+            if show_alpha and "alpha_eff_trace" in extras:
+                ax2.plot(extras["alpha_eff_trace"], label="alpha_eff (DSP)")
+
         ax2.set_xlabel("Time")
+        if use_legend:
+            ax2.legend()
         ax2.grid(True)
-        ax2.legend()
         st.pyplot(fig2)
 
 # --------------------------
@@ -232,7 +241,7 @@ if (mode == "With Neuromodulation" and neuromod_mode != "off") or \
 else:
     mod_signal = None
 
-want_extras = (mode == "Dynamic Spike Probability")
+want_extras = (mode == "Dynamic Spike Probability") or use_quantum
 spikes, voltages, inputs, extras = run_simulation(config, input_current, mod_signal, want_extras=want_extras)
 
 with right:

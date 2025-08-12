@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="qlif_neurons",
-    version="0.6.0",
+    version="0.6.2",
     packages=find_packages(where="src"),
     package_dir={"": "src"},
     install_requires=[

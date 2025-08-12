@@ -8,35 +8,65 @@ class QLIFLayer(nn.Module):
         super().__init__()
         self.lif_group = QLIF(**kwargs)
 
-    def forward(self, input_seq: torch.Tensor, external_modulation: torch.Tensor = None, return_extras: bool = False):
-        timesteps, batch_size, num_neurons = input_seq.shape
-        self.lif_group.resize(batch_size, device=input_seq.device)
+    def forward(self, input_seq: torch.Tensor,
+                external_modulation: torch.Tensor = None,
+                return_extras: bool = False):
+        T, B, N = input_seq.shape
+        dev = input_seq.device
+        self.lif_group.resize(B, device=dev)
 
-        spike_trace = torch.zeros_like(input_seq, dtype=torch.bool)
+        spike_trace   = torch.zeros_like(input_seq, dtype=torch.bool)
         voltage_trace = torch.zeros_like(input_seq)
 
-        if return_extras and self.lif_group.dynamic_spike_probability is not None:
-            adapt_trace = torch.zeros_like(input_seq, dtype=torch.float32)
-            alpha_trace = torch.zeros_like(input_seq, dtype=torch.float32)
-        else:
-            adapt_trace = alpha_trace = None
+        want_quantum_extras = return_extras and bool(self.lif_group.quantum_mode)
+        want_dsp_extras     = return_extras and (self.lif_group.dynamic_spike_probability is not None)
 
-        for t in range(timesteps):
-            ext_mod_t = external_modulation[t] if external_modulation is not None and external_modulation.ndim == 3 else external_modulation
-            spikes = self.lif_group(input_seq[t], ext_mod_t)
-            spike_trace[t] = spikes
+        q_scale_trace = None
+        adaptcur_trace = None
+        adapt_trace = None
+        alpha_trace = None
+
+        if want_quantum_extras:
+            q_scale_trace   = torch.zeros(T, B, N, device=dev)
+            adaptcur_trace  = torch.zeros(T, B, N, device=dev)
+
+        if want_dsp_extras:
+            dsp = self.lif_group.dynamic_spike_probability
+            adapt_trace = torch.zeros(T, B, N, device=dev)
+            alpha_trace = torch.zeros(T, B, N, device=dev)
+            eps = float(dsp.eps)
+            base_alpha = float(dsp.base_alpha)
+
+        for t in range(T):
+            I_t  = input_seq[t]
+            m_t  = external_modulation[t] if external_modulation is not None else None
+            _ = self.lif_group(I_t, m_t)  # step
+
+            spike_trace[t]   = self.lif_group.spikes
             voltage_trace[t] = self.lif_group.V
 
-            if adapt_trace is not None:
+            if want_quantum_extras:
+                q_like = self.lif_group._expand_like(self.lif_group.q_scale.to(dev), self.lif_group.V)
+                q_scale_trace[t]  = q_like
+                adaptcur_trace[t] = self.lif_group.adaptation_current
+
+            if want_dsp_extras:
                 dsp = self.lif_group.dynamic_spike_probability
                 adapt = dsp.adaptation
                 adapt_trace[t] = adapt
-                # alpha_eff = base_alpha / (1 + adaptation)
-                alpha_eff = dsp.base_alpha / (1.0 + adapt).clamp_min(dsp.eps)
+                alpha_eff = base_alpha / (1.0 + adapt).clamp_min(eps)
                 alpha_trace[t] = alpha_eff
 
-        if return_extras and adapt_trace is not None:
-            return spike_trace, voltage_trace, {"adaptation_trace": adapt_trace, "alpha_eff_trace": alpha_trace}
+        if return_extras:
+            extras = {}
+            if want_quantum_extras:
+                extras["q_scale_trace"] = q_scale_trace
+                extras["adaptation_current_trace"] = adaptcur_trace
+            if want_dsp_extras:
+                extras["adaptation_trace"] = adapt_trace
+                extras["alpha_eff_trace"]  = alpha_trace
+            return spike_trace, voltage_trace, extras
+
         return spike_trace, voltage_trace
 
     def reset(self):
