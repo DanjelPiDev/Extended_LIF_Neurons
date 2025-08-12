@@ -65,7 +65,7 @@ class QLIF(nn.Module):
                  use_ahp: bool = True,
                  tau_ahp: float = 120.0,
                  ahp_jump: float = 0.3,
-                 g_ahp: float = 1.0,
+                 g_ahp: float = 0.2,
                  ):
         """
         Initialize the LIF neuron group with its parameters.
