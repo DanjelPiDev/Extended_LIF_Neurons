@@ -220,7 +220,6 @@ class QLIF(nn.Module):
             return x.expand_as(ref)
         return x
 
-    @staticmethod
     def init_quantum(lif, p0=0.02, target_slope=0.15):
         import math, torch
         s = (1 / math.pi) * math.acos(1 - 2 * p0)
