@@ -116,10 +116,6 @@ class QLIF(nn.Module):
         :param g_ahp: Coupling strength from AHP to the membrane potential.
         """
         assert num_neurons > 0, "Number of neurons must be positive."
-
-        if stochastic:
-            assert noise_std > 0, "Noise standard deviation must be positive in stochastic mode."
-
         assert tau > 0.0, "Membrane time constant must be positive."
         assert min_threshold > 0, "Minimum threshold must be positive."
         assert max_threshold > min_threshold, "Maximum threshold must be greater than the minimum threshold."
