@@ -187,14 +187,14 @@ class QLIF(nn.Module):
             self.register_buffer("eta", torch.tensor(float(eta)))
 
         if learnable_qscale:
-            self.q_scale = nn.Parameter(torch.tensor(1.0))
+            self.q_scale = nn.Parameter(torch.ones(num_neurons))
         else:
-            self.register_buffer("q_scale", torch.tensor(1.0))
+            self.register_buffer("q_scale", torch.ones(num_neurons))
 
         if learnable_qbias:
-            self.q_bias = nn.Parameter(torch.tensor(0.0))
+            self.q_bias = nn.Parameter(torch.zeros(num_neurons))
         else:
-            self.register_buffer("q_bias", torch.tensor(0.0))
+            self.register_buffer("q_bias", torch.zeros(num_neurons))
 
         self.register_buffer("_qnode_ready", torch.tensor(0, dtype=torch.int8))
 
@@ -204,6 +204,10 @@ class QLIF(nn.Module):
         self.register_buffer("synaptic_efficiency", torch.ones(1, num_neurons))
         self.register_buffer("neuromodulator", torch.ones(1, num_neurons))
         self.register_buffer("spike_values", torch.zeros(1, num_neurons))
+
+        self.register_buffer("refrac", torch.zeros(1, num_neurons))
+        self.register_buffer("tau_ref", torch.tensor(6.0))
+        self.register_buffer("r_jump", torch.tensor(1.0))
 
         self.register_buffer("tau_ahp", torch.tensor(float(tau_ahp)))
         self.register_buffer("ahp", torch.zeros(1, num_neurons))
@@ -221,6 +225,7 @@ class QLIF(nn.Module):
         self.synaptic_efficiency = torch.ones(shape, device=dev)
         self.neuromodulator = torch.ones(shape, device=dev)
         self.spike_values = torch.zeros(shape, device=dev)
+        self.refrac = torch.zeros(shape, device=dev)
         self.ahp = torch.zeros(shape, device=dev)
         if self.dynamic_spike_probability:
             self.dynamic_spike_probability.resize(batch_size, self.num_neurons, dev)
@@ -232,6 +237,7 @@ class QLIF(nn.Module):
         self.adaptation_current.zero_()
         self.synaptic_efficiency.fill_(1.0)
         self.neuromodulator.fill_(1.0)
+        self.refrac.zero_()
         self.ahp.zero_()
         if self.dynamic_spike_probability:
             self.dynamic_spike_probability.reset(self.V.shape[0],
@@ -252,11 +258,11 @@ class QLIF(nn.Module):
         return x
 
     def init_quantum(self, p0: float = 0.02, slope0: float = 0.10):
-        # p0 in (0,1), slope0 ~ dp/d_delta bei delta=0
+        # p0 in (0,1), slope0 ~ dp/d_delta at delta=0
         eps = 1e-6
-        # β = arccos(1 - 2 p0)
+        # beta = arccos(1 - 2p0)
         beta = torch.acos(torch.clamp(1.0 - 2.0 * torch.tensor(p0), -1.0 + eps, 1.0 - eps))
-        # α = 2*slope0 / sin(beta)
+        # alpha = 2*slope0 / sin(beta)
         alpha = (2.0 * torch.tensor(slope0)) / torch.clamp(torch.sin(beta), min=eps)
 
         with torch.no_grad():
@@ -345,9 +351,29 @@ class QLIF(nn.Module):
 
         if self.quantum_mode:
             delta = self.V - V_th_eff
-            p = self._quantum_prob(delta, mod_for_prob=mod_for_prob)
-            if torch.isnan(p).any():
-                raise RuntimeError("NaN in spike probabilities")
+
+            adapt = None
+            if self.allow_dynamic_spike_probability and self.dynamic_spike_probability is not None:
+                _, adapt = self.dynamic_spike_probability(
+                    delta,
+                    prev_spike_float=self.spike_values,  # previous step's spikes
+                    mod=mod_for_prob,
+                    mod_strength=self.neuromod_strength,
+                    mod_mode=("prob_slope" if self.neuromod_mode == "prob_slope" else "off")
+                )
+
+            alpha_eff = self._expand_like(self.q_scale.to(I.device), delta)  # (B,N)
+            if adapt is not None:
+                eps = float(self.dynamic_spike_probability.eps)
+                alpha_eff = alpha_eff / (1.0 + adapt).clamp_min(eps)
+
+            if self.neuromod_mode == "prob_slope" and (mod_for_prob is not None):
+                alpha_eff = alpha_eff * (1.0 + self.neuromod_strength * mod_for_prob)
+
+            beta = self._expand_like(self.q_bias.to(I.device), delta) - self.quantum_leak
+
+            p = q_spike_prob(delta, alpha=alpha_eff, beta=beta).clamp_(0.0, 1.0)
+            p = (p * torch.exp(-self.refrac)).clamp_(0.0, 1.0)
 
             if self.training:
                 u = torch.rand_like(p)
@@ -360,7 +386,7 @@ class QLIF(nn.Module):
                 self.spike_values = self.spikes.float()
 
             if self.allow_dynamic_spike_probability and self.dynamic_spike_probability is not None:
-                _p, _ = self.dynamic_spike_probability(
+                _, _ = self.dynamic_spike_probability(
                     delta,
                     prev_spike_float=self.spike_values,
                     mod=mod_for_prob,
@@ -379,8 +405,10 @@ class QLIF(nn.Module):
                         mod_strength=self.neuromod_strength,
                         mod_mode=("prob_slope" if self.neuromod_mode == "prob_slope" else "none")
                     )
+                    p = (p * torch.exp(-self.refrac)).clamp_(0.0, 1.0)
                 else:
                     p = torch.sigmoid(delta)
+                    p = (p * torch.exp(-self.refrac)).clamp_(0.0, 1.0)
 
                 if self.training:
                     y_hard = bernoulli_spike(p, training=True)
@@ -400,6 +428,9 @@ class QLIF(nn.Module):
         s = self.spikes.float()
         k_reset = 0.3
         self.V = self.V + s * (self.V_reset - self.V) * k_reset
+
+        decay_ref = math.exp(- float(self.dt) / float(self.tau_ref.item()))
+        self.refrac = self.refrac * decay_ref + self.r_jump * s
 
         if self.use_ahp:
             # exp(-dt / tau_ahp)
