@@ -20,6 +20,8 @@
 </p>
 
 
+> Note: This QLIF implementation is quantum-inspired, meaning it uses a qubit-like probabilistic spike decision mechanism within a classical simulation. It is not a direct quantum circuit model as described in [arXiv:2407.16398](https://arxiv.org/html/2407.16398).
+
 ### Development Notes
 
 > **Quantum-inspired Leaky Integrate-and-Fire (QLIF) neurons for PyTorch.**  
