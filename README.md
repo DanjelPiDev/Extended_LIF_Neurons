@@ -273,12 +273,43 @@ with torch.no_grad():
 
 ---
 
-#### Results
+## MNIST Smoke Test
 
-<div align="center">
-    <img src="./src/Images/neuron_activity_2.png" width="1000">
-    <p>Figure 2: Example of LIF Neuron Activity (Different Modes)</p>
-</div>
+Quick sanity check on the SpikingMLP + QLIF implementation.  
+This run uses a reduced dataset subset and limited epochs to validate that the
+model trains end-to-end and produces reasonable accuracy.
+
+### Command
+In the `src` directory, run:
+```bash
+python mnist_qlif_smoke.py \
+  --epochs 5 \
+  --T 20 \
+  --hidden 512 \
+  --batch-size 128 \
+  --lr 5e-4 \
+  --clip-grad 0.5 \
+  --plot
+```
+### Training Log (excerpt)
+```
+Epoch 1 | Step 0001 | loss 2.3031 | acc  10.9%
+Epoch 1 | Step 0020 | loss 2.2136 | acc  56.2%
+...
+[TEST] epoch 1 | accuracy: 59.10%
+...
+Epoch 3 | Step 0040 | loss 1.6887 | acc  62.5%
+[TEST] epoch 3 | accuracy: 69.32%
+...
+Epoch 5 | Step 0040 | loss 1.2140 | acc  87.5%
+[TEST] epoch 5 | accuracy: 79.92%
+```
+### Results
+![MNIST Training Plot](./src/figs/single_run__curves.png)
+![MNIST Accuracy](./src/figs/single_run__spikes_and_input.png)
+
+Within only 5 epochs on CPU, the model already reached ~80% test accuracy,
+confirming correct gradient flow, spiking dynamics, and end-to-end learning.
 
 ---
 
