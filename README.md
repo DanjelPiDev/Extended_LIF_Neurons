@@ -4,7 +4,7 @@
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.7.0+cu118-red.svg)](https://pytorch.org/)
 [![PennyLane](https://img.shields.io/badge/PennyLane-0.42.0-orange.svg)](https://pennylane.ai/)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-yellow.svg)](https://www.python.org/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-AGPL-3.svg)](LICENSE)
 
 
 <p align="left">
