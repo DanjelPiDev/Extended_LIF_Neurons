@@ -11,12 +11,6 @@
   <a href="https://colab.research.google.com/github/DanjelPiDev/QLIF-Neurons/blob/main/notebooks/QLIF_quickstart.ipynb" target="_blank">
     <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open in Colab: QLIF_quickstart">
   </a>
-  <!-- Optional: zweites Notebook (falls vorhanden) -->
-  <!--
-  <a href="https://colab.research.google.com/github/DanjelPiDev/QLIF-Neurons/blob/main/notebooks/QLIF_vs_Norse.ipynb" target="_blank">
-    <img src="https://img.shields.io/badge/Colab-QLIF%20vs%20Norse-yellow?logo=google-colab" alt="Open in Colab: QLIF vs Norse">
-  </a>
-  -->
 </p>
 
 
