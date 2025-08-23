@@ -31,11 +31,34 @@ Adaptive thresholds, dynamic spike probabilities, short-term synaptic plasticity
 
 > If you want to directly test it, you can either run the Streamlit demo or [Open in Google Colab](https://colab.research.google.com/github/DanjelPiDev/QLIF-Neurons/blob/main/notebooks/QLIF_quickstart.ipynb).
 
-### Overview
+## Overview
 Simulating biologically-inspired Leaky Integrate-and-Fire neurons with quantum-inspired spike decision mechanics (**QLIF**)
 vs classical LIF neurons (**Norse LIF**).
 ![QLIF Neurons vs. Norse LIF](./src/Images/qlif_vs_norse.gif)
 
+## Table of Contents
+
+- [Quickstart](#quickstart)
+  - [Install](#install)
+    - [Via clone and pip](#via-clone-and-pip)
+    - [Or directly via pip](#or-directly-via-pip)
+  - [Streamlit Demo](#streamlit-demo)
+  - [Minimal Example](#minimal-example)
+- [Overview](#overview-1)
+  - [Key features include](#key-features-include)
+  - [Parameters](#parameters)
+  - [How It Works](#how-it-works)
+    - [Classic vs. Quantum Spike Generation](#classic-vs-quantum-spike-generation)
+    - [Input Processing](#input-processing)
+    - [Effective Input Calculation](#effective-input-calculation)
+    - [Membrane Potential Update](#membrane-potential-update)
+    - [Spike Generation & Reset](#spike-generation--reset)
+- [Quantum Mode, Theory, Mapping & Calibration](#quantum-mode-theory-mapping--calibration)
+  - [1) One-Qubit Circuit](#1-one-qubit-circuit-what-we-actually-compute)
+  - [2) Mapping the membrane gap Δ to θ](#2-mapping-the-membrane-gap--to-θ)
+  - [3) Why monotonic mapping?](#3-why-monotonic-mapping)
+- [MNIST Smoke Test](#mnist-smoke-test)
+- [License](#license)
 
 ---
 
