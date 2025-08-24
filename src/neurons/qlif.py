@@ -253,17 +253,19 @@ class QLIF(nn.Module):
             return x.expand_as(ref)
         return x
 
-    def init_quantum(self, p0: float = 0.02, slope0: float = 0.10):
-        # p0 in (0,1), slope0 ~ dp/d_delta at delta=0
+    def init_quantum(self, p0: float = 0.12, slope0: float = 0.30,
+                     k: float = 1.0, theta_max: float = math.pi/2 - 5e-3):
         eps = 1e-6
-        # beta = arccos(1 - 2p0)
-        beta = torch.acos(torch.clamp(1.0 - 2.0 * torch.tensor(p0), -1.0 + eps, 1.0 - eps))
-        # alpha = 2*slope0 / sin(beta)
-        alpha = (2.0 * torch.tensor(slope0)) / torch.clamp(torch.sin(beta), min=eps)
+        beta = torch.acos(torch.clamp(1.0 - 2.0*torch.tensor(p0), -1.0 + eps, 1.0 - eps))
+        # dp/dv|0 = 0.5 * sin(beta) * (theta_max * k * alpha)
+        alpha = (2.0 * torch.tensor(slope0)) / (theta_max * k * torch.sin(beta).clamp(min=eps))
 
         with torch.no_grad():
             self.q_bias.fill_(float(beta + self.quantum_leak))
             self.q_scale.fill_(float(alpha))
+
+        self.register_buffer("theta_max", torch.tensor(theta_max))
+        self.register_buffer("k_q", torch.tensor(k))
 
     def _build_qnode_if_needed(self):
         if bool(self._qnode_ready.item()):
@@ -280,18 +282,18 @@ class QLIF(nn.Module):
         self._qnode_ready.fill_(1)
 
     def _quantum_prob(self, delta: torch.Tensor, mod_for_prob=None):
-        """
-        delta: (B,N) = V - V_th_eff
-        returns: p in [0,1], shape (B,N)
-        """
-        alpha = self.q_scale
-        beta = self.q_bias - self.quantum_leak
+        # q_scale/q_bias to (B,N)
+        alpha_eff = self._expand_like(self.q_scale.to(delta.device), delta)
+        beta      = self._expand_like(self.q_bias.to(delta.device),  delta) - self.quantum_leak
 
         if self.neuromod_mode == "prob_slope" and (mod_for_prob is not None):
-            alpha = alpha * (1.0 + self.neuromod_strength * mod_for_prob)
+            alpha_eff = alpha_eff * (1.0 + self.neuromod_strength * mod_for_prob)
 
-        p = q_spike_prob(delta, alpha=alpha, beta=beta)
-        return p.clamp_(0.0, 1.0)
+        k = float(getattr(self, "k_q", torch.tensor(1.0)).item())
+        theta_max = float(getattr(self, "theta_max", torch.tensor(math.pi/2 - 5e-3)).item())
+
+        p = q_spike_prob(delta, alpha=alpha_eff, beta=beta, k=k, theta_max=theta_max)
+        return p.clamp_(1e-5, 1-1e-5)
 
     def forward(self, I: torch.Tensor, external_modulation: torch.Tensor = None) -> torch.Tensor:
         """
@@ -342,7 +344,8 @@ class QLIF(nn.Module):
             case _:
                 raise ValueError(f"Unknown neuromodulation mode: {self.neuromod_mode}")
 
-        dV = (I_eff - self.V) / (self.tau if isinstance(self.tau, torch.Tensor) else torch.tensor(self.tau, device=I.device))
+        dV = (I_eff - self.V) / (
+            self.tau if isinstance(self.tau, torch.Tensor) else torch.tensor(self.tau, device=I.device))
         self.V = self.V + dV * self.dt + (noise if noise is not None else 0.0)
 
         if self.quantum_mode:
@@ -363,23 +366,18 @@ class QLIF(nn.Module):
                 eps = float(self.dynamic_spike_probability.eps)
                 alpha_eff = alpha_eff / (1.0 + adapt).clamp_min(eps)
 
-            if self.neuromod_mode == "prob_slope" and (mod_for_prob is not None):
-                alpha_eff = alpha_eff * (1.0 + self.neuromod_strength * mod_for_prob)
-
-            beta = self._expand_like(self.q_bias.to(I.device), delta) - self.quantum_leak
-
-            p = q_spike_prob(delta, alpha=alpha_eff, beta=beta).clamp_(0.0, 1.0)
-            p = (p * torch.exp(-self.refrac)).clamp_(0.0, 1.0)
+            p = self._quantum_prob(delta, mod_for_prob=mod_for_prob)
+            # p = (p * torch.exp(-self.refrac)).clamp_(0.0, 1.0)
+            p = p.clamp_(1e-5, 1 - 1e-5)
 
             if self.training:
                 u = torch.rand_like(p)
                 y_hard = (u < p).float()
-                y = p + (y_hard - p).detach()  # STE
-                self.spike_values = y
                 self.spikes = y_hard.bool()
+                self.spike_values = p
             else:
                 self.spikes = (torch.rand_like(p) < p)
-                self.spike_values = self.spikes.float()
+                self.spike_values = p
 
             if self.allow_dynamic_spike_probability and self.dynamic_spike_probability is not None:
                 _, _ = self.dynamic_spike_probability(
@@ -421,7 +419,9 @@ class QLIF(nn.Module):
                 # Bool for the reset
                 self.spikes = (delta >= 0)
 
-        s = self.spikes.float()
+        # s = self.spikes.float()
+        s = self.spike_values
+
         k_reset = 0.3
         self.V = self.V + s * (self.V_reset - self.V) * k_reset
 

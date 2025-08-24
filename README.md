@@ -328,6 +328,19 @@ Epoch 5 | Step 0040 | loss 1.2140 | acc  87.5%
 Within only 5 epochs on CPU, the model already reached ~80% test accuracy,
 confirming correct gradient flow, spiking dynamics, and end-to-end learning.
 
+#### Current Results Comparison (after 10 epochs):
+- **QLIF Neurons**: Image reconstruction BCE loss ~0.17 after 10 epochs on MNIST (T=40, hidden=256)
+- **Norse LIF Neurons**: Image reconstruction BCE loss ~0.14 after 10 epochs on MNIST (T=40, hidden=256)
+
+Still not fully optimized, but QLIF is in the right ballpark and shows reasonable reconstructions.
+**Working on further tuning and improvements.**
+
+![MNIST QLIF vs Norse LIF](./src/Images/qlif_ae_reconstructions_grid.png)
+![MNIST QLIF vs Norse LIF](./src/Images/norse_lif_ae_reconstructions_grid.png)
+
+With the following reconstruction losses after 10 epochs:
+![MNIST QLIF vs Norse LIF](./src/Images/recon_loss_overlay.png)
+
 ---
 
 ### License
